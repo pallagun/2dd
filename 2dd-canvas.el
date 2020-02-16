@@ -15,9 +15,16 @@
 (defclass 2dd-canvas (2dg-rect)
   ()
   :documentation "A container for a canvas, a place where scxml things can be drawn")
+(defun 2dd-canvas- (x-min x-max y-min y-max)
+  "Create a 2dd-canvas based on X-MIN X-MAX Y-MIN and Y-MAX.
 
+This is a factory function for humans."
+  (2dd-canvas :x-min (float x-min)
+              :x-max (float x-max)
+              :y-min (float y-min)
+              :y-max (float y-max)))
 (cl-defmethod 2dd-pprint ((canvas 2dd-canvas))
-  (format "canvas(%s)" (cl-call-next-method)))
+  (format "canvas(%s)" (2dg-pprint canvas)))
 (cl-defmethod cl-print-object ((object 2dd-canvas) stream)
   "This seems to be used only for edebug sessions."
   (princ (2dd-pprint object) stream))
@@ -27,7 +34,7 @@
 
 The X-SIZE and Y-SIZE of the relative canvas can be specified as
 well as the X-OFFSET and Y-OFFSET."
-  (with-slots (x-min x-max y-min y-max) parent-canvas
+  (with-slots (x-min x-max y-min y-max) canvas
     (2dd-canvas :x-min (+ x-min x-offset)
                 :y-min (+ y-min y-offset)
                 :x-max (+ x-min x-offset x-size)
@@ -47,8 +54,8 @@ CANVAS will be devided into a grid having ROWS rows and COLUMNS columns.")
   "Return a list of canvas representing a gridded division of CANVAS.
 
 CANVAS will be devided into a grid having ROWS rows and COLUMNS columns."
-  (let ((x-spacing (or horizontal-spacing 10.0))
-        (y-spacing (or vertical-spacing 4.0))
+  (let ((x-spacing (or horizontal-spacing 0.0))
+        (y-spacing (or vertical-spacing 0.0))
         (num-rows (float rows))
         (num-columns (float columns)))
     ;; Go from top left to bottom right - english language reading order.

@@ -333,5 +333,5 @@ This function will only draw the shell of the rectangle."
                                                    (cdr pixel-data))))
                          finally (insert "\n")))))
 
-(provide 'scxml-scratch-render)
-;;; scxml-scratch-render.el ends here
+(provide '2dd-scratch-render)
+;;; 2dd-scratch-render.el ends here

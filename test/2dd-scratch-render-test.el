@@ -4,7 +4,7 @@
 
 
 (ert-deftest 2dd-scratch-buffer-line-vert-test ()
-  (let ((sbuffer (2dd---scratch-buffer 10 10)))
+  (let ((sbuffer (2dd---scratch-buffer-factory 10 10)))
     (2dd---scratch-line-vert sbuffer 2 2 8 2dd---vertical)))
 
 

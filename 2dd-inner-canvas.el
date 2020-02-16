@@ -26,12 +26,12 @@
 
 The X-SIZE and Y-SIZE of the relative canvas can be specified as
 well as the X-OFFSET and Y-OFFSET."
-  (with-slots (_parent x-min x-max y-min y-max) parent-canvas
-    (2dd-canvas :parent _parent
-                :x-min (+ x-min x-offset)
-                :y-min (+ y-min y-offset)
-                :x-max (+ x-min x-offset x-size)
-                :y-max (+ y-min y-offset y-size))))
+  (with-slots (_parent x-min x-max y-min y-max) canvas
+    (2dd-inner-canvas :parent _parent
+                      :x-min (+ x-min x-offset)
+                      :y-min (+ y-min y-offset)
+                      :x-max (+ x-min x-offset x-size)
+                      :y-max (+ y-min y-offset y-size))))
 
 (provide '2dd-inner-canvas)
 ;;; 2dd-inner-canvas.el ends here

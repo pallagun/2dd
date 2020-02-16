@@ -27,15 +27,14 @@
 ;;
 ;; I think I need a hint (or some type of parent-relative coordinates) because without that
 ;; the plotting could get out of hand.
-
-
-
-(defun 2dd-plot (root-drawing canvas child-fn preserve-drawing-p-fn &optional method)
+(cl-defgeneric 2dd-plot ((drawing 2dd-drawing) (canvas 2dd-canvas) child-fn preserve-drawing-p-fn &optional settings)
+  "Plot DRAWING on CANVAS.")
+(cl-defmethod 2dd-plot ((root-drawing 2dd-drawing) (canvas 2dd-canvas) child-fn preserve-drawing-p-fn &optional settings)
   "(Re)Plot drawings for all elements on a CANVAS.
 
 Drawings are modified in place.
 
-ROOT-DRAWING is a single root drawing which may contain children.
+DRAWINGS should be a list of 2dd-drawing elements.
 
 CANVAS is the area allowed for drawings to be plotted in.
 
@@ -48,80 +47,177 @@ drawing should be preserved and a nil value when a drawing should
 be replotted.  It will be called as (funcall
 PRESERVE-DRAWING-P-FN drawing).
 
-METHOD is the optional plotting method to use."
-  (cond ((or (null method) (eq method 'simple-grid)) ;default
-         (2dd-plot-simple-grid root-drawing canvas child-fn))
-        (t (error "Unknown drawing method: %s" method))))
+SETTINGS is an optional plist of settings including the keys:
+':method - 'simple-grid is default
 
+simple-grid keys:
+':sibling-margin-vertical
+':sibling-margin-horizontal
+':inner-padding-horizontal
+':inner-padding-vertical
+
+Padding and margin are used as they are in <html> styles.  Margin
+is external to the element, Padding is internal."
+  (unless (functionp child-fn)
+    (error "Child-fn must be a function"))
+  (unless (functionp preserve-drawing-p-fn)
+    (error "Preserve-drawing-p-fn must be a function"))
+  (let ((method (or (plist-get settings :method)
+                    'simple-grid)))
+    (cond ((eq method 'simple-grid)
+           (2dd--plot-simple-grid root-drawing canvas child-fn preserve-drawing-p-fn settings))
+          (t (error "Unknown drawing method: %s" method)))))
 
 (defun 2dd---simple-grid-dimensions-by-num-children (num-children)
   "Given a NUM-CHILDREN return the dimensions of a grid which can hold them.
 
 It returns a plist of the form (:columns <INT> :rows <INT>)
 It will be able to hold at least that many children, possibly more."
-  (let ((num-columns (ceiling (sqrt num-child-nodes))))
+  (let ((num-columns (ceiling (sqrt num-children))))
     (list :columns num-columns
-          :rows (ceiling (/ (float num-child-nodes) (float num-columns))))))
-(defun 2dd-plot-simple-grid (drawing canvas child-fn preserve-drawing-p-fn &optional force-replot)
+          :rows (ceiling (/ (float num-children) (float num-columns))))))
+(defun 2dd--plot-simple-grid (drawing canvas child-fn preserve-drawing-p-fn settings &optional force-replot)
   "When force-replot is true it's because some parent drawing got replotted.
 
 When plotting in simple grid mode:
 - Rectangles will consume all of their allowable space.
 - Points will consume the same space as a rectangle would."
-  (if (or force-replot (not (funcall preserve-drawing-p-fn drawing)))
-      ;; forced to redraw
-      (let ((child-drawings (funcall child-fn drawing)))
-        (if (not child-drawings)
-            ;; no children: simply replot the drawing
-            (2dd-set-from drawing canvas))
-        ;; Has children, handle their replotting as well.
-        (let* ((inner-canvas (2dd-get-inner-canvas drawing))
-               (children-and-relative-coords (mapcar
-                                              (lambda (child)
-                                                (cons child
-                                                      (2dg-relative-coordinates inner-canvas
-                                                                                child)))
-                                              child-drawings)))
-          ;; now resize
+  (let ((horizontal-pad (or (plist-get settings :inner-padding-horizontal) 0.0))
+        (vertical-pad (or (plist-get settings :inner-padding-vertical) 0.0)))
+    (cl-flet ((inner-pad (lambda (rect)
+                           (if (not (or horizontal-pad vertical-pad))
+                               rect     ;no padding, just return rect as it is.
+                             (with-slots (x-min x-max y-min y-max) rect
+                               (2dg-rect :x-min (+ x-min horizontal-pad)
+                                         :x-max (- x-max horizontal-pad)
+                                         :y-min (+ y-min vertical-pad)
+                                         :y-max (- y-max vertical-pad)))))))
+
+      ;; TODO - if the padding has changed: must replot too.  Or I guess
+      ;; not replot.  the past plotting settings could be sticky and
+      ;; only updated when a drawing is forced to replot.  That would
+      ;; require, eventally, some type of update-settings-only behavior
+
+      (let* ((child-drawings (funcall child-fn drawing))
+             (has-geometry (2dd-geometry drawing))
+             (must-replot (or force-replot
+                              (not has-geometry)
+                              (not (funcall preserve-drawing-p-fn drawing))))
+             (prev-inner-canvas (and has-geometry (2dd-get-inner-canvas drawing))))
+
+        (when must-replot
           (2dd-set-from drawing canvas)
-          (let ((new-inner-canvas (2dd-get-inner-canvas drawing)))
-            (mapc (lambda (child-and-relative-coords)
-                    (let ((child (car child-and-relative-coords))
-                          (relative-coords (cdr child-and-relative-coords)))
-                      (2dd-plot-simple-grid drawing
-                                            (2dg-absolute-coordinates new-inner-canvas relative-coords)
-                                            child-fn
-                                            preserve-drawing-p-fn
-                                            t)))
-                  children-and-relative-coords))))
-    ;; Not being forced to redraw
-    (unless (2dd-geometry drawing)
-      ;; This drawing does not exist it must be plotted.
-      (2dd-set-from drawing canvas))
+          (2dd-set-padding drawing horizontal-pad vertical-pad))
 
-    (let* ((inner-canvas (2dd-get-inner-canvas drawing))
-           (child-drawings (funcall child-fn drawing))
-           (any-child-without-drawing (some (2dd-complement #'2dd-drawing)
-                                            child-drawings)))
-      (if any-child-without-drawing
-          ;; When any child is missing a drawing the whole set of siblings
-          ;; must be replotted.  because this is simple grid plotting we
-          ;; will create a simple grid and place each drawing sequentialy
-          ;; in a grid cell
-          (let* ((grid-dimensions (2dd---simple-grid-dimensions-by-num-children
-                                   (length child-drawings)))
-                 (grid-cells (2dd-split-grid inner-canvas
-                                             (plist-get grid-dimensions :rows)
-                                             (plist-get grid-dimensions :columns))))
-            ;; for each child, replot it in the grid-cell with the same idx
-            HERE!!!
+        (when child-drawings
+          (if (or (not prev-inner-canvas)
+                  (some (2dd-complement #'2dd-geometry)
+                        child-drawings)
+                  (some (lambda (child)
+                          (not (funcall preserve-drawing-p-fn child)))
+                        child-drawings))
+              ;; Parent is new or at least one child must be
+              ;; replotted, therefore all children must be replotted.
+              (let* ((grid-dimensions (2dd---simple-grid-dimensions-by-num-children
+                                       (length child-drawings)))
+                     (inner-canvas (2dd-get-inner-canvas drawing))
+                     (grid-cells (2dd-split-grid inner-canvas
+                                                 (plist-get grid-dimensions :rows)
+                                                 (plist-get grid-dimensions :columns)
+                                                 (plist-get settings :sibling-margin-horizontal)
+                                                 (plist-get settings :sibling-margin-vertical))))
+                ;; for each child, replot it in the grid-cell with the same idx
+                (cl-loop for child-drawing in child-drawings
+                         for grid-cell in grid-cells
+                         do (2dd--plot-simple-grid child-drawing grid-cell child-fn preserve-drawing-p-fn settings t)))
+            ;; every child drawing exists and all of them should be
+            ;; preserved.  The parent has a previous inner canvas, use
+            ;; that to carry over relative layout
+            (let ((new-inner-canvas (2dd-get-inner-canvas drawing)))
+              (mapc (lambda (child)
+                      (let* ((relative-coord (2dg-relative-coordinates prev-inner-canvas
+                                                                       (2dd-geometry child)))
+                             (new-absolute-coord (2dg-absolute-coordinates new-inner-canvas
+                                                                           relative-coord)))
+                        (2dd--plot-simple-grid child
+                                               new-absolute-coord
+                                               child-fn
+                                               preserve-drawing-p-fn
+                                               settings
+                                               t)))
+                    child-drawings))))
+
+        ;; - no children, no problem.
+        ;; - have children at least one is must-replot
+        ;; - have children none need replot.
+
+        ;; OLD below.
 
 
 
-      )
-  (mapc (lambda (child-drawing)
-          (2dd-plot-simple-grid child-drawing (2dd-geometry child-drawing) child-fn preserve-drawing-p-fn))
-        (funcall child-fn drawing)))
+        ;; (if (and (2dd-geometry drawing)
+        ;;        (or force-replot
+        ;;            (not (funcall preserve-drawing-p-fn drawing))))
+        ;;   ;; forced to redraw but does not currently have existing drawing geometry.
+        ;;   (let ((child-drawings (funcall child-fn drawing)))
+        ;;     (if (null child-drawings)
+        ;;         ;; no child drawings.
+        ;;         (progn
+        ;;           (2dd-set-from drawing canvas)
+        ;;           (2dd-set-padding drawing horizontal-pad vertical-pad))
+        ;;       ;; child drawings exist
+        ;;       (let* ((inner-canvas (2dd-get-inner-canvas drawing))
+        ;;              (children-and-relative-coords (mapcar
+        ;;                                             (lambda (child)
+        ;;                                               (cons child
+        ;;                                                     (2dg-relative-coordinates inner-canvas
+        ;;                                                                               (2dd-geometry child))))
+        ;;                                             child-drawings)))
+        ;;         (2dd-set-from drawing canvas)
+        ;;         (2dd-set-padding drawing horizontal-pad vertical-pad)
+        ;;         (let ((new-inner-canvas (2dd-get-inner-canvas drawing)))
+        ;;           (mapc (lambda (child-and-relative-coords)
+        ;;                   (let ((child (car child-and-relative-coords))
+        ;;                         (relative-coords (cdr child-and-relative-coords)))
+        ;;                     (2dd--plot-simple-grid drawing
+        ;;                                           (2dg-absolute-coordinates new-inner-canvas relative-coords)
+        ;;                                           child-fn
+        ;;                                           preserve-drawing-p-fn
+        ;;                                           settings
+        ;;                                           t)))
+        ;;                 children-and-relative-coords)))))
+
+        ;; ;; Not being forced to redraw
+        ;; (unless (2dd-geometry drawing)
+        ;;   ;; This drawing does not exist it must be plotted.
+        ;;   (2dd-set-from drawing canvas)
+        ;;   (2dd-set-padding drawing horizontal-pad vertical-pad))
+
+        ;; ;; Handle child drawings
+        ;; (let* ((child-drawings (funcall child-fn drawing))
+        ;;        (any-child-without-drawing (some (2dd-complement #'2dd-geometry)
+        ;;                                          child-drawings)))
+        ;;   (if any-child-without-drawing
+        ;;       ;; When any child is missing a drawing the whole set of siblings
+        ;;       ;; must be replotted.  because this is simple grid plotting we
+        ;;       ;; will create a simple grid and place each drawing sequentialy
+        ;;       ;; in a grid cell
+        ;;       (let* ((grid-dimensions (2dd---simple-grid-dimensions-by-num-children
+        ;;                                (length child-drawings)))
+        ;;              (inner-canvas (2dd-get-inner-canvas drawing))
+        ;;              (grid-cells (2dd-split-grid inner-canvas
+        ;;                                          (plist-get grid-dimensions :rows)
+        ;;                                          (plist-get grid-dimensions :columns)
+        ;;                                          (plist-get settings :sibling-margin-horizontal)
+        ;;                                          (plist-get settings :sibling-margin-vertical))))
+        ;;         ;; for each child, replot it in the grid-cell with the same idx
+        ;;         (cl-loop for child-drawing in child-drawings
+        ;;                  for grid-cell in grid-cells
+        ;;                  do (2dd--plot-simple-grid child-drawing grid-cell child-fn preserve-drawing-p-fn settings t)))
+        ;;     ;; all children have drawings (which I assume are valid) recurse.
+        ;;     (cl-loop for child-drawing in child-drawings
+        ;;              do (2dd--plot-simple-grid child-drawing (2dd-geometry child-drawing) child-fn preserve-drawing-p-fn settings)))))
+        ))))
 
 
 ;; (cl-defmethod scxml---get-canvas-divisions ((rectangle scxml-drawing-divided-rect) (num-child-nodes integer))

@@ -52,12 +52,11 @@ relative to the parent-canvas.")
   "Attempt to build a simplified DRAWING as seen by human eyes in VIEWPORT.
 
 VIEWPORT is used to establish how agressive the simplification can be.")
-(cl-defgeneric 2dd-get-inner-canvas ((drawing 2dd-drawing))
-  "Return the inner canvas of DRAWING which may be nil.")
+(cl-defgeneric 2dd-inner-canvas-p ((drawing 2dd-drawing))
+  "Return non-nil if this drawing has an inner-canvas.
 
-(cl-defmethod 2dd-get-inner-canvas ((drawing 2dd-drawing))
-  "By default, drawings will have no inner canvas."
-  nil)
+Having an inner-canvas indicates that a drawing has space within
+it to hold other drawings.")
 (cl-defmethod 2dd-num-edit-idxs ((drawing 2dd-drawing))
   "Non-editable drawings always have zero edit indices."
   0)
@@ -66,6 +65,11 @@ VIEWPORT is used to establish how agressive the simplification can be.")
   (error "Non-editable drawings do not have edit idxs"))
 (cl-defmethod 2dd-edit-idx-points ((drawing 2dd-drawing))
   "Non-editable drawings do not have any points."
+  nil)
+(cl-defmethod 2dd-inner-canvas-p ((drawing 2dd-drawing))
+  "Return non-nil if this drawing has an inner-canvas.
+
+By default, drawings do not have inner-canvases."
   nil)
 
 (defclass 2dd-editable-drawing (2dd-drawing)
@@ -92,6 +96,33 @@ and should not mutate anything.")
            :type string))
   :abstract t
   :documentation "A mixin class to give drawings a single string label.")
+
+(defclass 2dd-with-inner-canvas ()
+  ((_padding-horizontal :initarg :padding-horizontal
+                        :reader 2dd-padding-horizontal
+                        :writer 2dd-set-padding-horizontal
+                        :initform 0.0
+                        :type float)
+   (_padding-vertical :initarg :padding-vertical
+                       :reader 2dd-padding-vertical
+                       :writer 2dd-set-padding-vertical
+                       :initform 0.0
+                       :type float))
+  :abstract t
+  :documentation "When a drawing has an inner canvas this class holds the current plotting information relevant to child drawings.")
+(cl-defmethod 2dd-has-inner-canvas-p ((drawing-with-inner 2dd-with-inner-canvas))
+  "Drawings declared to have an inner canavs will return 't here."
+  t)
+(cl-defgeneric 2dd-get-inner-canvas ((drawing-with-inner 2dd-with-inner-canvas))
+  "Return the current inner canvas of DRAWING-WITH-INNER.")
+(cl-defmethod 2dd-get-inner-canvas ((drawing-with-inner 2dd-with-inner-canvas))
+  "Return the current inner canvas of DRAWING-WITH-INNER."
+  (error "Must implement 2dd-get-inner-canvas for %s"
+         (eieio-object-class-name drawing-with-inner)))
+(cl-defmethod 2dd-set-padding ((drawing 2dd-with-inner-canvas) (padding-horizontal number) (padding-vertical number))
+  "Set PADDING-HORIZONTAL and PADDING-VERTICAL on this DRAWING."
+  (2dd-set-padding-horizontal drawing (float padding-horizontal))
+  (2dd-set-padding-vertical drawing (float padding-vertical)))
 
 
 (provide '2dd-drawing)
