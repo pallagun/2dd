@@ -19,6 +19,9 @@
   ()
   :documentation "Represents a rectangle which can be drawn on a
 canvas.")
+(defsubst 2dd-rect-class-p (any)
+  "Equivalent of (object-of-class-p ANY '2dd-rect)"
+  (object-of-class-p any '2dd-rect))
 (cl-defmethod 2dd-set-geometry :before ((this 2dd-rect) value)
   "Restrict THIS to have a VALUE which is of type 2dg-rect."
   (unless (2dg-rect-p value)

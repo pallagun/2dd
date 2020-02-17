@@ -186,21 +186,21 @@
   "Given a VIEWPORT - fire out a scratch."
   (2dd---scratch-buffer-factory (2dd-required-pixel-width viewport)
                                 (2dd-required-pixel-height viewport)))
-(defun 2dd--scratch-dividers (scratch viewport divider-list)
-  "Place DIVIDER-LIST of 2dg-segments on to SCRATCH for VIEWPORT."
-  (let* ((transformers (2dd-get-scratch-int-transformers viewport))
-         (x-transformer (car transformers))
-         (y-transformer (cdr transformers)))
-    (mapc (lambda (divider-segment)
-            (with-slots (start end) divider-segment
-              (2dd---scratch-line scratch
-                                  (funcall x-transformer (2dg-x start))
-                                  (funcall y-transformer (2dg-y start))
-                                  (funcall x-transformer (2dg-x end))
-                                  (funcall y-transformer (2dg-y end))
-                                  2dd---divider)))
-          divider-list)))
-(defun 2dd--scratch-rect (scratch viewport rect &optional style)
+;; (defun 2dd--scratch-dividers (scratch viewport divider-list)
+;;   "Place DIVIDER-LIST of 2dg-segments on to SCRATCH for VIEWPORT."
+;;   (let* ((transformers (2dd-get-scratch-int-transformers viewport))
+;;          (x-transformer (car transformers))
+;;          (y-transformer (cdr transformers)))
+;;     (mapc (lambda (divider-segment)
+;;             (with-slots (start end) divider-segment
+;;               (2dd---scratch-line scratch
+;;                                   (funcall x-transformer (2dg-x start))
+;;                                   (funcall y-transformer (2dg-y start))
+;;                                   (funcall x-transformer (2dg-x end))
+;;                                   (funcall y-transformer (2dg-y end))
+;;                                   2dd---divider)))
+;;           divider-list)))
+(defun 2dd--scratch-rect-outline (scratch viewport rect &optional style)
   "Place RECT (a 2dd-rect) on to SCRATCH for VIEWPORT, optionally with STYLE.
 
 This function will only draw the shell of the rectangle."
@@ -208,14 +208,21 @@ This function will only draw the shell of the rectangle."
   (let* ((transformers (2dd-get-scratch-int-transformers viewport))
          (x-transformer (car transformers))
          (y-transformer (cdr transformers)))
-    (let ((x-min (funcall x-transformer (2dg-x-min rect)))
-          (x-max (funcall x-transformer (2dg-x-max rect)))
-          (y-min (funcall y-transformer (2dg-y-min rect)))
-          (y-max (funcall y-transformer (2dg-y-max rect))))
-      (2dd---scratch-line-vert scratch x-min y-min y-max 2dd---vertical style)
-      (2dd---scratch-line-vert scratch x-max y-min y-max 2dd---vertical style)
-      (2dd---scratch-line-hori scratch x-min x-max y-min 2dd---horizontal style)
-      (2dd---scratch-line-hori scratch x-min x-max y-max 2dd---horizontal style))))
+    (2dd--scratch-rect-outline-tr scratch rect x-transformer y-transformer style)))
+(defun 2dd--scratch-rect-outline-tr (scratch rect x-transformer y-transformer &optional style)
+  "Place RECT (a 2dd-rect) on to SCRATCH for VIEWPORT, optionally with STYLE.
+
+This function will only draw the shell of the rectangle."
+  ;; (2dd--drawing-logger "scratch rendering id: %s" (scxml-name rect))
+  (let ((x-min (funcall x-transformer (2dg-x-min rect)))
+        (x-max (funcall x-transformer (2dg-x-max rect)))
+        (y-min (funcall y-transformer (2dg-y-min rect)))
+        (y-max (funcall y-transformer (2dg-y-max rect))))
+    (2dd---scratch-line-vert scratch x-min y-min y-max 2dd---vertical style)
+    (2dd---scratch-line-vert scratch x-max y-min y-max 2dd---vertical style)
+    (2dd---scratch-line-hori scratch x-min x-max y-min 2dd---horizontal style)
+    (2dd---scratch-line-hori scratch x-min x-max y-max 2dd---horizontal style)))
+
 
 ;; (defun 2dd--scratch-point-label (scratch viewport pt-label)
 ;;   "Place PT-LABEL (an scxml-drawing-point) on to SCRATCH for VIEWPORT.

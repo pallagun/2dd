@@ -1,10 +1,13 @@
 ;;; 2dd-diagram.el --- diagram container -*- lexical-binding: t -*-
 
 ;;; Commentary:
-;; A diagram holds all pieces of data needed render and interact with
-;; a collection of drawings
+;; A diagram holds a root canvas, root drawing and viewport.
 
 ;;; Code:
+
+(require '2dg)
+(require '2dd-canvas)
+(require '2dd-drawing)
 
 (defclass 2dd-diagram ()
   ((_canvas :initarg :canvas
@@ -18,8 +21,8 @@
    (_root :initarg :root
           :reader 2dd-get-root
           :writer 2dd-set-root
-          :type 2dd-drawing)
-   :documentation "Contains everything you'll need to render this drawing"))
+          :type 2dd-drawing))
+   :documentation "Contains everything you'll need to render this drawing")
 (cl-defgeneric 2dd-find-element-selection ((diagram 2dd-diagram) (selection-rect 2dg-rect) child-fn)
   "Find the drawing in DIAGRAM inside the SELECTION-RECT.
 
@@ -39,22 +42,49 @@ Selection preference order:
   (let ((start-drawing (oref diagram _root)))
     (or ;; (2dd---find-point selection-rect start-drawing)
         ;; (2dd---find-link selection-rect start-drawing)
-        (2dd---find-other selection-rect start-drawing)
+        (2dd---find-other selection-rect start-drawing child-fn)
         start-drawing)))
 (defun 2dd---find-other (selection-rect search-drawing child-fn)
   "Get first non-link/non-point element in the SELECTION-RECT.
 Start searching at SEARCH-PARENT.  When nothing is found return
 search-parent."
   (block 2dd---find-selection
-    THIS - get this working HERE.
-    (mapc (lambda (child)
-            (let ((drawing (scxml-element-drawing child)))
-              (when (and drawing
-                         (2dg-has-intersection selection-rect drawing 'stacked))
-                (return-from scxml---find-selection
-                  (scxml---find-other selection-rect child)))))
+    (mapc (lambda (child-drawing)
+            (let ((childg (2dd-geometry child-drawing)))
+              (when (and childg
+                         (2dg-has-intersection selection-rect childg 'stacked))
+                (return-from 2dd---find-selection
+                  (2dd---find-other selection-rect child-drawing child-fn)))))
           (funcall child-fn search-drawing))
-    search-parent))
+    search-drawing))
+
+(cl-defgeneric 2dd-render ((diagram 2dd-diagram) child-fn)
+  "Render diagram to a string.")
+(cl-defmethod 2dd-render ((diagram 2dd-diagram) child-fn)
+  "Render this diagram to a string."
+  (with-slots (_root _viewport _canvas) diagram
+    (let ((scratch (2dd--get-scratch _viewport))
+          (transformers (2dd-get-scratch-int-transformers _viewport)))
+      (2dd---render scratch
+                    _root
+                    _canvas
+                    child-fn
+                    (car transformers)
+                    (cdr transformers))
+      (2dd--scratch-write scratch))))
+
+(defun 2dd---render (scratch drawing canvas child-fn x-transformer y-transformer)
+  "draw everything!"
+  (cond ((2dd-rect-class-p drawing)
+         (let ((rect (2dd-geometry drawing)))
+           (2dd--scratch-rect-outline-tr scratch rect x-transformer y-transformer)))
+        (t (error "Unable to render drawing type: %s"
+                  (eieio-object-class-name drawing))))
+  ;; now draw children.
+  (mapc (lambda (child)
+          (2dd---render scratch child canvas child-fn x-transformer y-transformer))
+        (funcall child-fn drawing)))
+
 ;; (defun scxml---find-transition (selection-rect search-parent)
 ;;   "Get first transition element in SELECTION-RECT.
 

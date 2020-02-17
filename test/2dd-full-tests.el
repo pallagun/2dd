@@ -9,7 +9,7 @@
          (rect (2dd-rect :geometry (2dg-rect :x-min 2.0 :x-max 8.0
                                              :y-min 2.0 :y-max 8.0)))
          (sbuffer (2dd--get-scratch viewport)))
-    (2dd--scratch-rect sbuffer viewport (2dd-geometry rect))
+    (2dd--scratch-rect-outline sbuffer viewport (2dd-geometry rect))
     (let ((output (with-temp-buffer
                     (2dd--scratch-write sbuffer)
                     (buffer-string)))
