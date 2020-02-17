@@ -6,5 +6,6 @@
 (require '2dd-drawing)
 (require '2dd-point)
 (require '2dd-rect)
+(require '2dd-plotter)
 
 (provide '2dd)

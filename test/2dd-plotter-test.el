@@ -173,7 +173,6 @@
                                         :y-min 6.0
                                         :y-max 94.0)
                               (2dd-geometry rect-b)))))
-
 (ert-deftest 2dd-plotter-simple-grid-test-007 ()
   "A drawing should not be modified if it's not requested.
 A drawing should be set if it's not set.
@@ -212,7 +211,8 @@ A,B: not set."
                                         :y-max 98.0)
                               (2dd-geometry rect-b)))))
 (ert-deftest 2dd-plotter-simple-grid-test-008 ()
-  "A drawing should not be modified if it's not requested.  All drawings set."
+  "A drawing should not be modified if it's not requested.
+All drawings set."
   (let ((rect-a (2dd-rect :label "A"
                           :geometry (2dg-rect :x-min 10.0
                                               :x-max 20.0
@@ -253,9 +253,10 @@ A,B: not set."
                                         :y-min 10.0
                                         :y-max 20.0)
                               (2dd-geometry rect-b)))))
-
-(ert-deftest 2dd-plotter-simple-grid-test-008 ()
-  "A drawing should not be modified if it is requested."
+(ert-deftest 2dd-plotter-simple-grid-test-009 ()
+  "A drawing should be modified if it is requested.
+Parent: replot request
+A, B: no replot request - should preserve their relative places."
   (let ((rect-a (2dd-rect :label "A"
                           :geometry (2dg-rect :x-min 10.0
                                               :x-max 30.0
@@ -297,6 +298,49 @@ A,B: not set."
                                         :y-min 50.0
                                         :y-max 100.0)
                               (2dd-geometry rect-b)))))
-
+(ert-deftest 2dd-plotter-simple-grid-test-010 ()
+  "A drawing should be modified if it is requested.
+Parent: no replot request.
+A, B: replot A request."
+  (let ((rect-a (2dd-rect :label "A"
+                          :geometry (2dg-rect :x-min 10.0
+                                              :x-max 30.0
+                                              :y-min 10.0
+                                              :y-max 20.0)))
+        (rect-b (2dd-rect :label "B"
+                          :geometry (2dg-rect :x-min 10.0
+                                              :x-max 30.0
+                                              :y-min 20.0
+                                              :y-max 30.0)))
+        (parent (2dd-rect :label "Parent"
+                          :geometry (2dg-rect :x-min 5.0
+                                              :x-max 95.0
+                                              :y-min 5.0
+                                              :y-max 95.0)))
+        (canvas (2dd-canvas- 0 100 0 100))
+        (settings (list :method 'simple-grid)))
+    (2dd-plot parent
+              canvas
+              (lambda (x)
+                (if (eq x parent)
+                    (list rect-a rect-b)
+                  nil))
+              (lambda (x) (not (eq x rect-a))) ;preserve parent and A
+              settings)
+    (should (2dg-almost-equal (2dg-rect :x-min 5.0
+                                        :x-max 95.0
+                                        :y-min 5.0
+                                        :y-max 95.0)
+                              (2dd-geometry parent)))
+    (should (2dg-almost-equal (2dg-rect :x-min 5.0
+                                        :x-max 50.0
+                                        :y-min 5.0
+                                        :y-max 95.0)
+                              (2dd-geometry rect-a)))
+    (should (2dg-almost-equal (2dg-rect :x-min 50.0
+                                        :x-max 95.0
+                                        :y-min 5.0
+                                        :y-max 95.0)
+                              (2dd-geometry rect-b)))))
 
 (provide '2dd-plotter-test)
