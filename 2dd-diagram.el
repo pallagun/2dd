@@ -22,7 +22,7 @@
           :reader 2dd-get-root
           :writer 2dd-set-root
           :type 2dd-drawing))
-   :documentation "Contains everything you'll need to render this drawing")
+  :documentation "Contains everything you'll need to render this drawing")
 (cl-defgeneric 2dd-find-element-selection ((diagram 2dd-diagram) (selection-rect 2dg-rect) child-fn)
   "Find the drawing in DIAGRAM inside the SELECTION-RECT.
 
@@ -42,21 +42,38 @@ Selection preference order:
   (let ((start-drawing (oref diagram _root)))
     (or ;; (2dd---find-point selection-rect start-drawing)
         ;; (2dd---find-link selection-rect start-drawing)
-        (2dd---find-other selection-rect start-drawing child-fn)
-        start-drawing)))
-(defun 2dd---find-other (selection-rect search-drawing child-fn)
+     (2dd---find-other selection-rect start-drawing child-fn))))
+
+(defsubst 2dd---other-touches-selection (selection-rect drawing)
+  "Return non-nil if DRAWING touches or is inside of SELECTION-RECT."
+  (let ((geom (2dd-geometry drawing)))
+    (and geom
+         (2dg-has-intersection selection-rect geom 'stacked))))
+(defun 2dd---find-other (selection-rect start-drawing child-fn)
   "Get first non-link/non-point element in the SELECTION-RECT.
 Start searching at SEARCH-PARENT.  When nothing is found return
 search-parent."
-  (block 2dd---find-selection
-    (mapc (lambda (child-drawing)
-            (let ((childg (2dd-geometry child-drawing)))
-              (when (and childg
-                         (2dg-has-intersection selection-rect childg 'stacked))
-                (return-from 2dd---find-selection
-                  (2dd---find-other selection-rect child-drawing child-fn)))))
-          (funcall child-fn search-drawing))
-    search-drawing))
+  (if (2dd---other-touches-selection selection-rect start-drawing)
+    ;; inside this drawing, see if any children are inside.
+    (cl-loop for child in (funcall child-fn start-drawing)
+             for child-result = (2dd---find-other selection-rect child child-fn)
+             when child-result
+              return child-result
+             finally return start-drawing)
+    nil))
+
+  ;;   (cl-find-if (lambda
+  ;;               (return-from 2dd---find-selection
+  ;;                 (2dd---find-other selection-rect child-drawing child-fn carry)))))
+  ;; (block 2dd---find-selection
+  ;;   (mapc (lambda (child-drawing)
+  ;;           (let ((childg (2dd-geometry child-drawing)))
+  ;;             (when (and childg
+  ;;                        (2dg-has-intersection selection-rect childg 'stacked))
+  ;;               (return-from 2dd---find-selection
+  ;;                 (2dd---find-other selection-rect child-drawing child-fn carry)))))
+  ;;         (funcall child-fn search-drawing))
+  ;;   carry))
 
 (cl-defgeneric 2dd-render ((diagram 2dd-diagram) child-fn)
   "Render diagram to a string.")
@@ -115,4 +132,4 @@ search-parent."
 ;;                    (object-of-class-p element 'scxml-initial)))
 ;;     nil))
 
-(provide 'scxml-diagram)
+(provide '2dd-diagram)

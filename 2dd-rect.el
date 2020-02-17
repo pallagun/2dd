@@ -30,7 +30,7 @@ canvas.")
   "Pretty print RECT."
   (format "dr:rect(%s:%s)"
           (2dd-label rect)
-          (cl-call-next-method)))
+          (2dg-pprint (oref rect _geometry))))
 
 (defsubst 2dd--clone-2dg-rect (any-rect)
   "Create a clone of ANY-RECT returning a 2dg-rect."
