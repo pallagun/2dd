@@ -14,11 +14,12 @@
 ;;; Code:
 (require '2dg)
 (require '2dd-drawing)
+(require '2dd-scratch-render)
 
 (defclass 2dd-rect (2dd-with-inner-canvas 2dd-editable-drawing 2dd-with-label)
   ()
   :documentation "Represents a rectangle which can be drawn on a
-canvas.")
+canvas.  It has an inner-canvas and a label")
 (defsubst 2dd-rect-class-p (any)
   "Equivalent of (object-of-class-p ANY '2dd-rect)"
   (object-of-class-p any '2dd-rect))
@@ -31,6 +32,31 @@ canvas.")
   (format "dr:rect(%s:%s)"
           (2dd-label rect)
           (2dg-pprint (oref rect _geometry))))
+(cl-defmethod 2dd-render ((rect 2dd-rect) scratch x-transformer y-transformer)
+  "Render RECT to SCRATCH buffer using X-TRANSFORMER and Y-TRANSFORMER.
+
+Overridable method for ecah drawing to render itself."
+  (let ((rectg (2dd-geometry rect))
+        (label (2dd-get-label rect)))
+    (let ((x-min (funcall x-transformer (2dg-x-min rectg)))
+          (x-max (funcall x-transformer (2dg-x-max rectg)))
+          (y-min (funcall y-transformer (2dg-y-min rectg)))
+          (y-max (funcall y-transformer (2dg-y-max rectg))))
+      (2dd---scratch-line-vert scratch x-min y-min y-max 2dd---vertical)
+      (2dd---scratch-line-vert scratch x-max y-min y-max 2dd---vertical)
+      (2dd---scratch-line-hori scratch x-min x-max y-min 2dd---horizontal)
+      (2dd---scratch-line-hori scratch x-min x-max y-max 2dd---horizontal)
+      ;; if there is a label, place it in the top left *pixel*
+      (when label
+        (let ((label-length (length label)))
+          (when (> label-length 0)
+            (let ((max-display-length (- (- x-max x-min) 2)))
+              (2dd---scratch-label scratch
+                                   (1+ x-min)
+                                   (1- y-max)
+                                   (if (> label-length max-display-length)
+                                       (substring label 0 max-display-length)
+                                     label)))))))))
 
 (defsubst 2dd--clone-2dg-rect (any-rect)
   "Create a clone of ANY-RECT returning a 2dg-rect."

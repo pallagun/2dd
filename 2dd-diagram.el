@@ -62,7 +62,7 @@ search-parent."
              finally return start-drawing)
     nil))
 
-  ;;   (cl-find-if (lambda
+ ;;   (cl-find-if (lambda
   ;;               (return-from 2dd---find-selection
   ;;                 (2dd---find-other selection-rect child-drawing child-fn carry)))))
   ;; (block 2dd---find-selection
@@ -75,9 +75,9 @@ search-parent."
   ;;         (funcall child-fn search-drawing))
   ;;   carry))
 
-(cl-defgeneric 2dd-render ((diagram 2dd-diagram) child-fn)
+(cl-defgeneric 2dd-render-all ((diagram 2dd-diagram) child-fn)
   "Render diagram to a string.")
-(cl-defmethod 2dd-render ((diagram 2dd-diagram) child-fn)
+(cl-defmethod 2dd-render-all ((diagram 2dd-diagram) child-fn)
   "Render this diagram to a string."
   (with-slots (_root _viewport _canvas) diagram
     (let ((scratch (2dd--get-scratch _viewport))
@@ -92,11 +92,7 @@ search-parent."
 
 (defun 2dd---render (scratch drawing canvas child-fn x-transformer y-transformer)
   "draw everything!"
-  (cond ((2dd-rect-class-p drawing)
-         (let ((rect (2dd-geometry drawing)))
-           (2dd--scratch-rect-outline-tr scratch rect x-transformer y-transformer)))
-        (t (error "Unable to render drawing type: %s"
-                  (eieio-object-class-name drawing))))
+  (2dd-render drawing scratch x-transformer y-transformer)
   ;; now draw children.
   (mapc (lambda (child)
           (2dd---render scratch child canvas child-fn x-transformer y-transformer))

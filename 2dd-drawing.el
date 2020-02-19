@@ -57,6 +57,12 @@ VIEWPORT is used to establish how agressive the simplification can be.")
 
 Having an inner-canvas indicates that a drawing has space within
 it to hold other drawings.")
+(cl-defgeneric 2dd-render ((drawing 2dd-drawing) scratch x-transformer y-transformer)
+  "Render DRAWING to SCRATCH buffer using X-TRANSFORMER and Y-TRANSFORMER.
+
+Overridable method for ecah drawing to render itself."
+  (error "Unable to render drawing of type %s"
+         (eieio-object-class-name drawing)))
 (cl-defmethod 2dd-num-edit-idxs ((drawing 2dd-drawing))
   "Non-editable drawings always have zero edit indices."
   0)
@@ -91,9 +97,10 @@ and should not mutate anything.")
 
 (defclass 2dd-with-label ()
   ((_label :initarg :label
-           :reader 2dd-label
+           :initform nil
+           :reader 2dd-get-label
            :writer 2dd-set-label
-           :type string))
+           :type (or null string)))
   :abstract t
   :documentation "A mixin class to give drawings a single string label.")
 
