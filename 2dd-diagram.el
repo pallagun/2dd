@@ -82,20 +82,25 @@ search-parent."
   (with-slots (_root _viewport _canvas) diagram
     (let ((scratch (2dd--get-scratch _viewport))
           (transformers (2dd-get-scratch-int-transformers _viewport)))
-      (2dd---render scratch
-                    _root
-                    _canvas
-                    child-fn
-                    (car transformers)
-                    (cdr transformers))
+      (2dd---render-worker scratch
+                           _root
+                           _canvas
+                           child-fn
+                           (car transformers)
+                           (cdr transformers))
       (2dd--scratch-write scratch))))
 
-(defun 2dd---render (scratch drawing canvas child-fn x-transformer y-transformer)
-  "draw everything!"
+(defun 2dd---render-worker (scratch drawing canvas child-fn x-transformer y-transformer)
+  "Draw everything recursively."
   (2dd-render drawing scratch x-transformer y-transformer)
   ;; now draw children.
   (mapc (lambda (child)
-          (2dd---render scratch child canvas child-fn x-transformer y-transformer))
+          (2dd---render-worker scratch
+                               child
+                               canvas
+                               child-fn
+                               x-transformer
+                               y-transformer))
         (funcall child-fn drawing)))
 
 ;; (defun scxml---find-transition (selection-rect search-parent)

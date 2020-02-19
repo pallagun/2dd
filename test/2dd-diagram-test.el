@@ -4,15 +4,14 @@
 (ert-deftest 2dd-diagram-test-001 ()
   "Simple diagram, one shape"
   (let ((diagram (2dd-diagram :canvas (2dd-canvas- 0 10 0 10)
-                              :root (2dd-rect :label "A"
-                                              :geometry (2dg-rect :x-min 5.0
+                              :root (2dd-rect :geometry (2dg-rect :x-min 5.0
                                                                   :x-max 9.0
                                                                   :y-min 2.0
                                                                   :y-max 8.0)))))
     ;; setup a default viewport.
     (2dd-set-viewport diagram (2dd-build-viewport (2dd-get-canvas diagram)))
     (let ((output (with-temp-buffer
-                    (2dd-render diagram (lambda (_) nil))
+                    (2dd-render-all diagram (lambda (_) nil))
                     (buffer-string)))
           (expected (mapconcat 'identity '("           "
                                            "           "
@@ -29,18 +28,18 @@
       (should (equal output expected)))))
 (ert-deftest 2dd-diagram-test-002 ()
   "Diagram, three shapes two of which are nested."
-  (let* ((child-a (2dd-rect :label "A" :geometry (2dg-rect :x-min 2.0
-                                                           :x-max 4.0
-                                                           :y-min 2.0
-                                                           :y-max 4.0)))
-         (child-b (2dd-rect :label "B" :geometry (2dg-rect :x-min 6.0
-                                                           :x-max 9.0
-                                                           :y-min 6.0
-                                                           :y-max 9.0)))
-         (parent (2dd-rect :label "P" :geometry (2dg-rect :x-min 1.0
-                                                          :x-max 10.0
-                                                          :y-min 1.0
-                                                          :y-max 10.0)))
+  (let* ((child-a (2dd-rect :geometry (2dg-rect :x-min 2.0
+                                                :x-max 4.0
+                                                :y-min 2.0
+                                                :y-max 4.0)))
+         (child-b (2dd-rect :geometry (2dg-rect :x-min 6.0
+                                                :x-max 9.0
+                                                :y-min 6.0
+                                                :y-max 9.0)))
+         (parent (2dd-rect :geometry (2dg-rect :x-min 1.0
+                                               :x-max 10.0
+                                               :y-min 1.0
+                                               :y-max 10.0)))
          (diagram (2dd-diagram :canvas (2dd-canvas- 0 10 0 10) :root parent)))
     ;; setup a default viewport.
     (2dd-set-viewport diagram (2dd-build-viewport (2dd-get-canvas diagram)))
@@ -51,7 +50,7 @@
                        nil)))
 
     (let ((output (with-temp-buffer
-                    (2dd-render diagram child-fn)
+                    (2dd-render-all diagram child-fn)
                     (buffer-string)))
           (expected (mapconcat 'identity '(" +--------+"
                                            " |    +--+|"

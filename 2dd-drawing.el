@@ -57,8 +57,10 @@ VIEWPORT is used to establish how agressive the simplification can be.")
 
 Having an inner-canvas indicates that a drawing has space within
 it to hold other drawings.")
-(cl-defgeneric 2dd-render ((drawing 2dd-drawing) scratch x-transformer y-transformer)
+(cl-defgeneric 2dd-render ((drawing 2dd-drawing) scratch x-transformer y-transformer &rest arg)
   "Render DRAWING to SCRATCH buffer using X-TRANSFORMER and Y-TRANSFORMER.
+
+ARG can be used to pass in additional info to any rendering function.
 
 Overridable method for ecah drawing to render itself."
   (error "Unable to render drawing of type %s"
@@ -80,7 +82,7 @@ By default, drawings do not have inner-canvases."
 
 (defclass 2dd-editable-drawing (2dd-drawing)
   ((_edit-idx :initarg :edit-idx
-              :reader 2dd-edit-idx
+              :reader 2dd-get-edit-idx
               :writer 2dd-set-edit-idx
               :initform nil
               :type (or null integer)

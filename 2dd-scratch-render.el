@@ -161,17 +161,7 @@
   ;;          do (2dd---scratch-overlay scratch x y char style))
   )
 
-(defconst 2dd---scratch-rect-edit-point-bytes
-  (list 2dd---arrow-any
-        2dd---arrow-down
-        2dd---arrow-any
-        2dd---arrow-right
-        2dd---arrow-any
-        2dd---arrow-up
-        2dd---arrow-any
-        2dd---arrow-left
-        2dd---arrow-any)
-  "If you're rendering edit idxs for a rect, this is the order you'll need to do that in.")
+
 (defun 2dd---scratch-fit-string (string max-chars)
   "Given a STRING, shorten it so it is at most MAX-CHARS"
   (if (<= max-chars 0)

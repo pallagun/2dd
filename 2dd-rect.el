@@ -32,20 +32,44 @@ canvas.  It has an inner-canvas and a label")
   (format "dr:rect(%s:%s)"
           (2dd-label rect)
           (2dg-pprint (oref rect _geometry))))
-(cl-defmethod 2dd-render ((rect 2dd-rect) scratch x-transformer y-transformer)
+
+(cl-defmethod 2dd-render ((rect 2dd-rect) scratch x-transformer y-transformer &rest style-plist)
   "Render RECT to SCRATCH buffer using X-TRANSFORMER and Y-TRANSFORMER.
 
 Overridable method for ecah drawing to render itself."
   (let ((rectg (2dd-geometry rect))
-        (label (2dd-get-label rect)))
+        (label (2dd-get-label rect))
+        (outline-style (plist-get style-plist :outline-style))
+        (label-style (plist-get style-plist :label-style))
+        (edit-idx-style (plist-get style-plist :edit-idx-style)))
     (let ((x-min (funcall x-transformer (2dg-x-min rectg)))
           (x-max (funcall x-transformer (2dg-x-max rectg)))
           (y-min (funcall y-transformer (2dg-y-min rectg)))
           (y-max (funcall y-transformer (2dg-y-max rectg))))
-      (2dd---scratch-line-vert scratch x-min y-min y-max 2dd---vertical)
-      (2dd---scratch-line-vert scratch x-max y-min y-max 2dd---vertical)
-      (2dd---scratch-line-hori scratch x-min x-max y-min 2dd---horizontal)
-      (2dd---scratch-line-hori scratch x-min x-max y-max 2dd---horizontal)
+      (2dd---scratch-line-vert scratch x-min y-min y-max 2dd---vertical outline-style)
+      (2dd---scratch-line-vert scratch x-max y-min y-max 2dd---vertical outline-style)
+      (2dd---scratch-line-hori scratch x-min x-max y-min 2dd---horizontal outline-style)
+      (2dd---scratch-line-hori scratch x-min x-max y-max 2dd---horizontal outline-style)
+      ;; if there is an edit idx set, draw the edit idx points
+      (when (2dd-get-edit-idx rect)
+        (cl-loop for point in (2dd-edit-idx-points rect)
+                 for marker-char in (list 2dd---arrow-any
+                                          2dd---arrow-down
+                                          2dd---arrow-any
+                                          2dd---arrow-right
+                                          2dd---arrow-any
+                                          2dd---arrow-up
+                                          2dd---arrow-any
+                                          2dd---arrow-left
+                                          2dd---arrow-any)
+                 for x-scratch = (funcall x-transformer (2dg-x point))
+                 for y-scratch = (funcall y-transformer (2dg-y point))
+                 do (2dd---scratch-set scratch
+                                       x-scratch
+                                       y-scratch
+                                       marker-char
+                                       edit-idx-style)))
+
       ;; if there is a label, place it in the top left *pixel*
       (when label
         (let ((label-length (length label)))
@@ -56,7 +80,8 @@ Overridable method for ecah drawing to render itself."
                                    (1- y-max)
                                    (if (> label-length max-display-length)
                                        (substring label 0 max-display-length)
-                                     label)))))))))
+                                     label)
+                                   label-style))))))))
 
 (defsubst 2dd--clone-2dg-rect (any-rect)
   "Create a clone of ANY-RECT returning a 2dg-rect."
@@ -73,7 +98,7 @@ There are always 8."
   "Get the locations of the edit idxs for RECT as an ordered list.
 
 Points start at the bottom left and go counter clock wise."
-  (with-slots (x-min x-max y-min y-max) rect
+  (with-slots (x-min x-max y-min y-max) (2dd-geometry rect)
     (list (2dg-point :x x-min :y y-min)
           (2dg-point :x (/ (+ x-min x-max) 2.0) :y y-min)
           (2dg-point :x x-max :y y-min)
