@@ -23,11 +23,11 @@
           :writer 2dd-set-root
           :type 2dd-drawing))
   :documentation "Contains everything you'll need to render this drawing")
-(cl-defgeneric 2dd-find-element-selection ((diagram 2dd-diagram) (selection-rect 2dg-rect) child-fn)
+(cl-defgeneric 2dd-find-drawing-selection ((diagram 2dd-diagram) (selection-rect 2dg-rect) child-fn)
   "Find the drawing in DIAGRAM inside the SELECTION-RECT.
 
 CHILD-FN should return all children of a given drawing.")
-(cl-defmethod 2dd-find-element-selection ((diagram 2dd-diagram) (selection-rect 2dg-rect) child-fn)
+(cl-defmethod 2dd-find-drawing-selection ((diagram 2dd-diagram) (selection-rect 2dg-rect) child-fn)
   "Find the element in DIAGRAM inside the SELECTION-RECT.
 
 CHILD-FN should return all children of a given drawing.
