@@ -30,7 +30,7 @@ canvas.  It has an inner-canvas and a label")
 (cl-defmethod 2dd-pprint ((rect 2dd-rect))
   "Pretty print RECT."
   (format "dr:rect(%s:%s)"
-          (2dd-label rect)
+          (2dd-get-label rect)
           (2dg-pprint (oref rect _geometry))))
 
 (cl-defmethod 2dd-render ((rect 2dd-rect) scratch x-transformer y-transformer &rest style-plist)
@@ -110,7 +110,7 @@ Points start at the bottom left and go counter clock wise."
 (cl-defmethod 2dd-edit-idx-point ((rect 2dd-rect) (idx integer))
   ;; TODO - figure out how to deduplicate this with points.
   "Get the location of the given edit idx BL is zero, go CCW from there."
-  (with-slots (x-min x-max y-min y-max) rect
+  (with-slots (x-min x-max y-min y-max) (2dd-geometry rect)
     (case idx
      ;; BL
      (0 (2dg-point :x x-min :y y-min))
