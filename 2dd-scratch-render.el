@@ -72,10 +72,12 @@
             string))))
 (defsubst 2dd---scratch-set (scratch x y char &optional style)
   "Set scratch-pixel in SCRATCH at X Y to be CHAR optionally with STYLE."
-  ;; TODO - should I use aset here?
-  ;; (aset (elt scratch y) x (cons char style)) ????
-  (setf (elt (elt scratch y) x)
-        (cons char style)))
+  ;; note: previously these checks weren't in place.  I'm not sure if
+  ;; they should remain in place or not.  For now they are required.
+  (when (and (< -1 x (2dd---scratch-size-x scratch))
+             (< -1 y (2dd---scratch-size-y scratch)))
+    (setf (elt (elt scratch y) x)
+          (cons char style))))
 (defun 2dd---scratch-overlay (scratch x y char &optional style)
   "Overlay CHAR onto SCRATCH at X Y with optional STYLE."
   (let ((extant (car (elt (elt scratch y) x))))
@@ -160,7 +162,6 @@
   ;; (cl-loop for x from x-min to x-max
   ;;          do (2dd---scratch-overlay scratch x y char style))
   )
-
 
 (defun 2dd---scratch-fit-string (string max-chars)
   "Given a STRING, shorten it so it is at most MAX-CHARS"
