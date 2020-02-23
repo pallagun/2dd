@@ -67,7 +67,7 @@
       (should (equal output expected)))
 
     ;; nothing is in the bottom left of the bottom left pixel
-    (should (eq (2dd-find-element-selection diagram
+    (should (eq (2dd-find-drawing-selection diagram
                                             (2dg-rect :x-min 0.0
                                                       :x-max 0.5
                                                       :y-min 0.0
@@ -75,7 +75,7 @@
                                             child-fn)
                 nil))
     ;; in the top left of the parent box should be only the parent.
-    (should (eq (2dd-find-element-selection diagram
+    (should (eq (2dd-find-drawing-selection diagram
                                             (2dg-rect :x-min 3.0
                                                       :x-max 4.5
                                                       :y-min 7.0
@@ -84,7 +84,7 @@
                 parent))
 
     ;; in the bottom left is child A
-    (should (eq (2dd-find-element-selection diagram
+    (should (eq (2dd-find-drawing-selection diagram
                                             (2dg-rect :x-min 2.0
                                                       :x-max 3.0
                                                       :y-min 3.0
@@ -93,7 +93,7 @@
                 child-a))
 
     ;; in the top right is child B
-    (should (eq (2dd-find-element-selection diagram
+    (should (eq (2dd-find-drawing-selection diagram
                                             (2dg-rect :x-min 5.0
                                                       :x-max 6.5
                                                       :y-min 5.0
@@ -103,7 +103,7 @@
 
     ;; if you select everything it should return the first and deepest
     ;; leaf node drawing
-    (should (eq (2dd-find-element-selection diagram
+    (should (eq (2dd-find-drawing-selection diagram
                                             (2dg-rect :x-min 0.5
                                                       :x-max 9.0
                                                       :y-min 0.5
