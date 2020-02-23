@@ -73,7 +73,7 @@ Overridable method for ecah drawing to render itself."
       (when label
         (let ((label-length (length label)))
           (when (> label-length 0)
-            (let ((max-display-length (- (- x-max x-min) 2)))
+            (let ((max-display-length (max 0 (- (- x-max x-min) 1))))
               (2dd---scratch-label scratch
                                    (1+ x-min)
                                    (1- y-max)
@@ -192,10 +192,15 @@ Return is of the form '(EDIT-IDX-NUM . EDIT-IDX-POINT)"
           (cl-loop for pt in vertical-pts
                    for delta-y = (2dg-y pt)
                    do (oset pt y (+ delta-y y)))))
-      (2dg-rect :y-min (2dg-y (first pts))
-                :y-max (2dg-y (third pts))
-                :x-min (2dg-x (first pts))
-                :x-max (2dg-x (second pts))))))
+      (let ((x-min (2dg-x (first pts)))
+            (x-max (2dg-x (second pts)))
+            (y-min (2dg-y (first pts)))
+            (y-max (2dg-y (third pts))))
+        ;; Before creating the rectangle, ensure it's not zero size or invalid.
+        (if (and (< x-min x-max) (< y-min y-max))
+            (2dg-rect :x-min x-min :x-max x-max
+                      :y-min y-min :y-max y-max)
+          nil)))))
 
 ;; (cl-defmethod 2dd-build-idx-edited ((rect 2dd-rect) (edit-idx integer) (move-vector 2dg-point) (viewport 2dd-viewport))
 ;;   "Build a rectangle drawing based off RECT having EDIT-IDX moved by MOVE-VECTOR."
