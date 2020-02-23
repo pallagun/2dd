@@ -109,6 +109,9 @@ Alpha > 1 zooms in.  Alpha < 1 zooms out."
 
 Uses drawing coordinate system."
   (2dg-incf viewport drawing-coord-delta))
+
+(cl-defgeneric 2dd-pan-scratch ((viewport 2dd-viewport) (scratch-x integer) (scratch-y integer))
+  "Move VIEWPORT by SCRATCH-X and SCRATCH-Y scratch pixels")
 (cl-defmethod 2dd-pan-scratch ((viewport 2dd-viewport) (scratch-x integer) (scratch-y integer))
   "Move VIEWPORT by SCRATCH-X and SCRATCH-Y scratch pixels"
   (2dd-pan viewport (2dg-scaled (2dg-point :x (float scratch-x)
@@ -128,7 +131,7 @@ Uses drawing coordinate system."
   "Grab the scaling from point to pixel from VIEWPORT"
   (2dd-scaling viewport))
 (cl-defmethod 2dd-get-point-scaling ((viewport 2dd-viewport))
-  "Grab the scaling from pixel to point from VIEWPORT"
+  "Grab the scaling from scratch to point from VIEWPORT"
   (with-slots (scaling) viewport
     (2dg-point :x (/ 1.0 (2dg-x scaling))
                :y (/ 1.0 (2dg-y scaling)))))
