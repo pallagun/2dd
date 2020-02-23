@@ -35,6 +35,12 @@
 May return nil or error if idx is invalid.")
 (cl-defgeneric 2dd-edit-idx-points ((drawing 2dd-drawing))
   "Get an ordered list of all the edit-idx points for this DRAWING.")
+(cl-defgeneric 2dd-build-move-edited-geometry ((drawing 2dd-drawing) (move-vector 2dg-point))
+  "Return new geometry based off moving DRAWING by MOVE-VECTOR.
+
+In the event that it's not possible to move DRAWING, return nil.
+
+Nothing should be mutated.")
 (cl-defgeneric 2dd-build-move-edited ((drawing 2dd-drawing) (move-vector 2dg-point) (viewport 2dd-viewport))
   ;; TODO - remove viewport from this, then from all methods.
   "Build a drawing based off moving DRAWING by MOVE-VECTOR.
@@ -91,11 +97,35 @@ By default, drawings do not have inner-canvases."
               zero and count up."))
   :abstract t
   :documentation "A drawing which can have its shape edited.")
+(cl-defgeneric 2dd-build-idx-edited-geometry ((drawing 2dd-editable-drawing) (edit-idx integer) (move-vector 2dg-point))
+  "Return new geometry based off moving EDIT-IDX of DRAWING by MOVE-VECTOR.
+
+This should only build a new geometry and return it (if possible)
+and should not mutate anything.  When the edit is not possible
+this function will return nil.")
 (cl-defgeneric 2dd-build-idx-edited ((drawing 2dd-editable-drawing) (edit-idx integer) (move-vector 2dg-point) (viewport 2dd-viewport))
   "Build a drawing based off moving EDIT-IDX of DRAWING by MOVE-VECTOR.
 
 This should only build a new drawing and return it (if possible)
 and should not mutate anything.")
+(cl-defgeneric 2dd-num-edit-idxs ((drawing 2dd-editable-drawing))
+  "Return the number of edit-idxs this DRAWING has."
+  (error "2dd-num-edit-idxs: Not implemented for drawing type: %s"
+         (eieio-object-class-name drawing)))
+(cl-defgeneric 2dd-edit-idx-points ((drawing 2dd-editable-drawing))
+  "Get the locations of the edit idxs for DRAWING as an ordered list."
+  (error "2dd-edit-idx-points: Not implemented for drawing type: %s"
+         (eieio-object-class-name drawing)))
+(cl-defgeneric 2dd-edit-idx-point ((drawing 2dd-editable-drawing) (edit-idx integer))
+  "Get the coordinate of the given EDIT-IDX for DRAWING."
+  (error "2dd-edit-idx-point: Not implemented for drawing type: %s"
+         (eieio-object-class-name drawing)))
+(cl-defgeneric 2dd-get-closest-edit-idx ((drawing 2dd-editable-drawing) (point 2dg-point))
+  "Return DRAWING's closest edit-idx to POINT.
+
+Return is of the form '(EDIT-IDX-NUM . EDIT-IDX-POINT)"
+  (error "2dd-get-closest-edit-idx: Not implemented for drawing type: %s"
+         (eieio-object-class-name drawing)))
 
 (defclass 2dd-with-label ()
   ((_label :initarg :label
