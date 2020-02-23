@@ -10,5 +10,6 @@
 (require '2dd-plotter)
 (require '2dd-diagram)
 (require '2dd-scratch-render)
+(require '2dd-mouse-handler)
 
 (provide '2dd)
