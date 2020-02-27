@@ -242,5 +242,23 @@ had before."
                                  child-fn)))
             child-drawings))))
 
+(cl-defgeneric 2dd-validate-containment ((parent 2dd-drawing) (sibling-drawings list) changed-geometry)
+  "Return non-nil if CHANGED-GEOMETRY is inside of PARENT's inner canvas and does not collide with any SIBLING-DRAWINGS.")
+(cl-defmethod 2dd-validate-containment ((parent 2dd-drawing) (sibling-drawings list) changed-geometry)
+  "Return non-nil if CHANGED-GEOMETRY is inside of PARENT's inner canvas and does not collide with any SIBLING-DRAWINGS."
+  (let ((parent-inner-canvas (2dd-get-inner-canvas parent)))
+    (if (not (2dg-contains parent-inner-canvas changed-geometry))
+        ;; not contained in the parent, invalid
+        nil
+      ;; contained in parent, evaluate any collisions with siblings
+      (cl-loop for sibling-drawing in sibling-drawings
+               for sibling-geometry = (2dd-geometry sibling-drawing)
+               when (2dg-has-intersection changed-geometry sibling-drawings 'strict)
+                do (cl-return nil)
+               finally return t))))
+
+
+
+
 (provide '2dd-plotter)
 ;;; scxml-draw.el ends here
