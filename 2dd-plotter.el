@@ -28,6 +28,7 @@
 ;; I think I need a hint (or some type of parent-relative coordinates) because without that
 ;; the plotting could get out of hand.
 (cl-defgeneric 2dd-plot ((drawing 2dd-drawing) (canvas 2dd-canvas) child-fn preserve-drawing-p-fn &optional settings)
+  ;; TODO - preserve-drawing-p-fn should really be replot-drawing-p-fn.  I'm having to negate it everywhere.
   "Plot DRAWING on CANVAS.")
 (cl-defmethod 2dd-plot ((root-drawing 2dd-drawing) (canvas 2dd-canvas) child-fn preserve-drawing-p-fn &optional settings)
   "(Re)Plot drawings for all elements on a CANVAS.
@@ -146,7 +147,6 @@ When plotting in simple grid mode:
                                                settings
                                                t)))
                     child-drawings))))
-
         ;; - no children, no problem.
         ;; - have children at least one is must-replot
         ;; - have children none need replot.
@@ -219,274 +219,28 @@ When plotting in simple grid mode:
         ;;              do (2dd--plot-simple-grid child-drawing (2dd-geometry child-drawing) child-fn preserve-drawing-p-fn settings)))))
         ))))
 
+(cl-defgeneric 2dd-update-plot ((drawing 2dd-drawing) new-geometry child-fn)
+  "Update DRAWING to have NEW-GEOMETRY.")
+(cl-defmethod 2dd-update-plot ((drawing 2dd-drawing) new-geometry child-fn)
+  "Update DRAWING to have NEW-GEOMETRY.
 
-;; (cl-defmethod scxml---get-canvas-divisions ((rectangle scxml-drawing-divided-rect) (num-child-nodes integer))
-;;   ;; TODO - this should be moved out into the drawing file.
+This function will edit all child (or contained) drawings of
+DRAWING to take on the same relative position to DRAWING as they
+had before."
+  (let ((child-drawings (funcall child-fn drawing))
+        (prev-inner-canvas (2dd-get-inner-canvas drawing)))
+    (2dd-set-from drawing new-geometry)
 
-;;   (mapcar (lambda (division)
-;;             (let ((sub-rect (cdr division)))
-;;               (with-slots (x-min x-max y-min y-max) sub-rect
-;;                 (scxml-inner-canvas :x-min x-min
-;;                                     :y-min y-min
-;;                                     :x-max x-max
-;;                                     :y-max y-max
-;;                                     :drawing rectangle))))
-;;           (scxml-get-divisions rectangle)))
-
-;; (cl-defmethod scxml--plot-node ((element scxml-drawable-element) (canvas scxml-canvas))
-;;   "Plot rectangular elements (and any child elements), phase 1 of plotting."
-;;   (when (not (or (scxml---is-renderable-as-node element)
-;;                  (object-of-class-p element 'scxml-scxml)))
-;;     (error "Wat?  shouldn't be calling this with thtat")) ;TODO - remove this check at some point?
-;;   (scxml--drawing-logger "scxml--plot-node: type:%s"
-;;                           (scxml-xml-element-name element))
-;;   (scxml--drawing-logger "scxml--plot-node: canvas: %s" (scxml-print canvas))
-;;   (let ((child-nodes (seq-filter 'scxml---is-renderable-as-node (scxml-children element)))
-;;         (node (scxml--update-drawing element canvas)))
-;;     (scxml--drawing-logger "scxml--plot-node: has-hint: %s" (when (scxml--hint element) t))
-;;     (scxml--drawing-logger "\tDrawing: %s" (scxml-print node))
-;;     (when child-nodes
-;;       (let ((divided-canvases (scxml---get-canvas-divisions node
-;;                                                             (length child-nodes))))
-;;         (unless divided-canvases
-;;           (error "why is this null????"))
-;;         ;; (cond ((scxml-parallel-p element)
-;;         ;;        (error "Error????"))
-;;         ;;       ('t                         ; scxml-state and scxml-scxml
-;;         ;;        (let* ((num-child-nodes (length child-nodes))
-;;         ;;               (num-columns (ceiling (sqrt num-child-nodes)))
-;;         ;;               (num-rows (ceiling (/ num-child-nodes num-columns)))
-;;         ;;               (divided-canvases (scxml--split-canvas (scxml-get-inner-canvas node)
-;;         ;;                                                      num-rows
-;;         ;;                                                      num-columns
-;;         ;;                                                      10.0
-;;         ;;                                                      4.0)))
-;;         ;; TODO: remove this when-error check once you can trust scmxl---get-canvas-divisions.
-;;         (cl-loop for child in child-nodes
-;;                  while child
-;;                  for sub-canvas in divided-canvases
-;;                  do (scxml--plot-node child sub-canvas))))))
-;; (cl-defmethod scxml--plot-links ((start scxml-element) (canvas scxml-canvas))
-;;   "Plot all links for the start element on canvas"
-
-;;   (cl-flet ((make-connector-for
-;;              (transition drawing destination-drawing)
-;;              (if (null drawing)
-;;                  ;; this connector won't be connected, make a dangling connector.
-;;                  (scxml-drawing-connector-dangling :point) ;; (2dg-centroid (scxml-element-drawing (scxml-parent transition))))
-
-;;                (let* ((target-point (2dg-centroid (or destination-drawing (scxml-element-drawing (scxml-parent transition)))))
-
-;;                       (edge-enumerator (scxml-leaving-segment-collision-edge drawing target-point)))
-;;                  (cond ((object-of-class-p drawing 'scxml-drawing-rect)
-;;                         (scxml-drawing-connector-rect :node drawing :edge edge-enumerator))
-;;                        ((scxml-drawing-point-p drawing)
-;;                         (scxml-drawing-connector-point :node drawing :exit-direction edge-enumerator))
-;;                        ('t
-;;                         (error "Unknown drawing type, unable to make connector"))))))
-;;             (set-dangling-connector-positions
-;;              ;; this function will set the location of a dangling connector for target connections only.
-;;              (arrow-drawing)
-;;              (let ((target-connector (scxml-arrow-target arrow-drawing)))
-;;                (when (object-of-class-p target-connector 'scxml-drawing-connector-unconnected)
-;;                  (let* ((source-connector (scxml-arrow-source arrow-drawing))
-;;                         (exit-direction (scxml-from-node-direction source-connector)))
-;;                    (when (null (scxml-dangling-point target-connector))
-;;                      ;; no point is set, must set it.
-;;                      (let ((exit-vector (2dg-vector-from-direction exit-direction)))
-;;                        (scxml-set-to-node-direction target-connector exit-direction)
-;;                        (scxml-set-point target-connector (2dg-add
-;;                                                           (scxml-connection-point source-connector)
-;;                                                           (2dg-scaled exit-vector 2.0))))))))))
-;;     (let* ((all-transitions (scxml-collect start (lambda (e) (object-of-class-p e 'scxml-transition))))
-;;            (need-drawings (seq-filter (lambda (transition)
-;;                                         (or (not (scxml-element-drawing transition))
-;;                                             (scxml--drawing-invalid? transition)))
-;;                                       all-transitions))
-;;            ;; (by-drawing-and-edge nil)
-;;            (by-state-and-edge nil)
-;;            ;; (by-state (make-hash-table))
-;;            )
-
-;;       ;; this mapc will build all arrows but will _not_ fill in the path.
-;;       ;; and the connector parametrics won't be set for automatic arrows
-;;       ;; (hinted arrows will still use their hinted connector parametrics)
-;;       (mapc (lambda (transition)
-;;               (cl-flet ((make-arrow
-;;                          (source-connector target-connector locked)
-;;                          (scxml-arrow :source source-connector
-;;                                       :target target-connector
-;;                                       :parent transition
-;;                                       :highlight (scxml--highlight transition)
-;;                                       :edit-idx (scxml--edit-idx transition)
-;;                                       :locked locked))
-;;                         ;; (collect-unparameterized-connectors2
-;;                         ;;  (connector transition drawing)
-;;                         ;;  ;; If this connector is connected to a rectangle it must have an
-;;                         ;;  ;; edge and a parametric for that edge set.  Parametrics are set
-;;                         ;;  ;; later on so I'll need to collect all unparameterized connectors
-;;                         ;;  ;; for later assignment.  I'm collecting them by state(element)
-;;                         ;;  ;; and edge
-;;                         ;;  (when (scxml-drawing-connector-rect-p connector)
-;;                         ;;    (let* ((edge (scxml-node-edge connector))
-;;                         ;;           (key (cons drawing edge))
-;;                         ;;           (cell (assoc key by-state-and-edge)))
-;;                         ;;      (if cell
-;;                         ;;          (setcdr cell (cons transition (cdr cell)))
-;;                         ;;        (setq by-drawing-and-edge
-;;                         ;;              (cons (cons key (list transition)) by-drawing-and-edge))))))
-;;                         (collect-unparameterized-connectors
-;;                          (connector transition element)
-;;                          ;; If this connector is connected to a rectangle it must have an
-;;                          ;; edge and a parametric for that edge set.  Parametrics are set
-;;                          ;; later on so I'll need to collect all unparameterized connectors
-;;                          ;; for later assignment.  I'm collecting them by state(element)
-;;                          ;; and edge
-;;                          (when (scxml-drawing-connector-rect-p connector)
-;;                            (let* ((edge (scxml-from-node-direction connector))
-;;                                   (key (cons element edge))
-;;                                   (cell (assoc key by-state-and-edge)))
-;;                              (if cell
-;;                                  (setcdr cell (cons transition (cdr cell)))
-;;                                (setq by-state-and-edge
-;;                                      (cons (cons key (list transition)) by-state-and-edge)))))))
-;;                 ;; group transitions by the scxml-states they touch.
-;;                 (let ((source (scxml-source transition))
-;;                       (target (scxml-target transition)))
-;;                   (let ((source-drawing (scxml-element-drawing source))
-;;                         (target-drawing (and target (scxml-element-drawing target)))
-;;                         (hint (scxml--hint transition)))
-;;                     (if hint
-;;                         ;; when there's a hint just set up all parts of the connectors
-;;                         (oset transition
-;;                               drawing
-;;                               (make-arrow (scxml-build-arrow-connector (scxml-source hint) source-drawing)
-;;                                           (scxml-build-arrow-connector (scxml-target hint) target-drawing)
-;;                                           't))
-;;                       ;; when there's no hint do not set parametric part of the connectors,
-;;                       ;; that'll get handled in a subsequent foreach (played by a maphash)
-;;                       ;; place a partially filled drawing here.
-;;                       ;; still needs connector parametrics and a path
-;;                       (let ((source-connector (make-connector-for transition source-drawing target-drawing))
-;;                             (target-connector (make-connector-for transition target-drawing source-drawing)))
-;;                         (oset transition
-;;                               drawing
-;;                               (make-arrow source-connector target-connector 'nil))
-;;                         ;; (collect-unparameterized-connectors2 source-connector transition source-drawing)
-;;                         ;; (collect-unparameterized-connectors2 target-connector transition target-drawing)
-;;                         (collect-unparameterized-connectors source-connector transition source) ;; source-edge)
-;;                         (collect-unparameterized-connectors target-connector transition target) ;; target-edge)g
-;;                         ))))))
-;;             need-drawings)
-;;       ;; now set the connector parametrics for unhinted transitions that you collected previously
-;;       (mapc (lambda (cell)
-;;               (let ((state (caar cell))
-;;                     ;; (edge (cdar cell))
-;;                     (transitions (cdr cell)))
-;;                 (let ((num-transitions (length transitions))
-;;                       (idx 0.0))
-;;                   ;; set each transitions connector sequetially PER EDGE and in proportion
-;;                   ;; this feels like it's leading to an optimization problem.
-;;                   (mapc (lambda (transition)
-;;                           (incf idx 1.0)
-;;                           (let* ((drawing (scxml-element-drawing transition))
-;;                                  (connector (if (eq (scxml-source transition) state)
-;;                                                 (scxml-arrow-source drawing)
-;;                                               (scxml-arrow-target drawing))))
-;;                             (oset connector
-;;                                   parametric
-;;                                   (/ idx (+ 1.0 num-transitions)))))
-;;                         transitions))))
-;;             by-state-and-edge)
-;;       ;; now you should be able to flesh out the paths
-;;       ;; and then mark them as valid drawings
-;;       (mapc (lambda (transition)
-;;               (let ((hint (scxml--hint transition)))
-;;                 (set-dangling-connector-positions (oref transition drawing))
-;;                 (if hint
-;;                     ;; handle hinted paths
-;;                     (scxml--set-path-from-hint (oref transition drawing) hint)
-;;                   ;; handle automatic paths
-;;                   (scxml--arrow-set-default-path (oref transition drawing)))
-;;                 (scxml--set-drawing-invalid transition 'nil)))
-;;             need-drawings))))
-;; (cl-defmethod scxml-plot ((diagram scxml-diagram))
-;;   "Plot out DIAGRAM (ensure all drawable elements have valid drawings"
-;;   (let ((start-node (float-time))
-;;         (start-link 'nil)
-;;         (end-time 'nil))
-;;     (with-slots (canvas root (element display-element)) diagram
-;;       (scxml--plot-node element canvas)
-;;       (setq start-link (float-time))
-;;       (scxml--plot-links element canvas)
-;;       (setq end-time (float-time))
-;;       (let ((node-time (- start-link start-node))
-;;             (link-time (- end-time start-link)))
-;;         (scxml--drawing-logger "scxml-plot (node: %.5f s, link: %.5f s, total: %.5f)"
-;;                                 node-time
-;;                                 link-time
-;;                                 (+ node-time link-time)))))
-;;   diagram)
-;; (cl-defmethod scxml-draw ((diagram scxml-diagram))
-;;   "Render a DIAGRAM in some buffer"
-;;   (scxml-plot diagram)
-;;   (let ((start-time (float-time)))
-;;     (with-slots (canvas root buffer viewport (element display-element)) diagram
-;;       (switch-to-buffer buffer)
-;;       ;; TODO - don't need both of these, use the scxml--diagram.
-;;       (setq-local scxml-draw--diagram diagram)
-;;       (setq-local scxml--diagram diagram)
-;;       (let ((scratch (scxml--get-scratch viewport)))
-;;         ;; erase the buffer
-;;         (goto-char (point-min))
-;;         (delete-char (- (point-max) (point-min)) nil)
-
-;;         ;; draw states, finals, parallels
-;;         (scxml-visit root
-;;                      (lambda (e)
-;;                        (let ((drawing (scxml-element-drawing e)))
-;;                          (scxml--drawing-logger "scxml-draw element:%s\n\tdrawing: %s\n"
-;;                                                  (when e (scxml-print e))
-;;                                                  (when drawing (scxml-print drawing)))
-;;                          (progn
-;;                            (when (scxml-drawing-divided-rect-class-p drawing);; (object-of-class-p drawing 'scxml-drawing-divided-rect)
-;;                              (scxml--scratch-dividers scratch
-;;                                                       viewport
-;;                                                       (scxml-dividers drawing)))
-;;                            (scxml--scratch-rect scratch
-;;                                                 viewport
-;;                                                 drawing
-;;                                                 ;; if it's a noshell-rect don't draw the actual rectangle
-;;                                                 (scxml-drawing-noshell-rect-p drawing)))))
-;;                      'scxml---is-renderable-as-rect)
-
-;;         ;; draw non-highlighted transitons first so they aren't obscured by other
-;;         ;; non-highlighted transitions
-;;         (scxml-visit root
-;;                      (lambda (e)
-;;                        (scxml--scratch-arrow scratch
-;;                                              viewport
-;;                                              (scxml-element-drawing e)))
-;;                      (lambda (e) (and (object-of-class-p e 'scxml-transition)
-;;                                       (not (scxml--highlight e)))))
-;;         (scxml-visit root
-;;                      (lambda (e)
-;;                        (scxml--scratch-point-label scratch
-;;                                                    viewport
-;;                                                    (scxml-element-drawing e)))
-;;                      (lambda (e) (object-of-class-p e 'scxml-initial)))
-;;         (scxml-visit root
-;;                      (lambda (e)
-;;                        (scxml--scratch-arrow scratch
-;;                                              viewport
-;;                                              (scxml-element-drawing e)))
-;;                      (lambda (e) (and (object-of-class-p e 'scxml-transition)
-;;                                       (scxml--highlight e))))
-
-;;         (scxml--scratch-write scratch))
-
-;;       (scxml--drawing-logger "scxml-draw %.5f ms" (- (float-time) start-time))
-;;       diagram)))
+    (let ((new-inner-canvas (2dd-get-inner-canvas drawing)))
+      (mapc (lambda (child)
+              (let* ((relative-coord (2dg-relative-coordinates prev-inner-canvas
+                                                               (2dd-geometry child)))
+                     (new-absolute-coord (2dg-absolute-coordinates new-inner-canvas
+                                                                   relative-coord)))
+                (2dd-update-plot child
+                                 new-absolute-coord
+                                 child-fn)))
+            child-drawings))))
 
 (provide '2dd-plotter)
 ;;; scxml-draw.el ends here
