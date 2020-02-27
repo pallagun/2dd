@@ -94,7 +94,7 @@ It will"
   "Handle all mouse events of concern."
   ;; TODO - Not sure if I'm approaching mouse handling properly.
   (interactive "e")
-  (message "mouse initial event: %s" event)
+  ;; (message "mouse initial event: %s" event)
   (let ((bubble-up-error)
         (current-window (first (second event))))
     (cl-flet ((pixel-from-event
