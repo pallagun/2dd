@@ -219,45 +219,62 @@ When plotting in simple grid mode:
         ;;              do (2dd--plot-simple-grid child-drawing (2dd-geometry child-drawing) child-fn preserve-drawing-p-fn settings)))))
         ))))
 
-(cl-defgeneric 2dd-update-plot ((drawing 2dd-drawing) new-geometry child-fn)
-  "Update DRAWING to have NEW-GEOMETRY.")
-(cl-defmethod 2dd-update-plot ((drawing 2dd-drawing) new-geometry child-fn)
+(cl-defgeneric 2dd-update-plot ((drawing 2dd-drawing) new-geometry child-fn &optional parent-drawing sibling-drawings)
   "Update DRAWING to have NEW-GEOMETRY.
+
+Returns non-nil on sucessful update, nil on failure.")
+(cl-defmethod 2dd-update-plot ((drawing 2dd-drawing) new-geometry child-fn &optional parent-drawing sibling-drawings)
+  "Update DRAWING to have NEW-GEOMETRY.
+
+Returns non-nil on sucessful update, nil on failure.
 
 This function will edit all child (or contained) drawings of
 DRAWING to take on the same relative position to DRAWING as they
 had before."
-  (let ((child-drawings (funcall child-fn drawing))
-        (prev-inner-canvas (2dd-get-inner-canvas drawing)))
-    (2dd-set-from drawing new-geometry)
+  (if (2dd--validate-containment parent-drawing
+                                 sibling-drawings
+                                 new-geometry)
+      ;; new geometry is validated - allow the update
+      (let ((child-drawings (funcall child-fn drawing))
+            (prev-inner-canvas (2dd-get-inner-canvas drawing)))
+        (2dd-set-from drawing new-geometry)
 
-    (let ((new-inner-canvas (2dd-get-inner-canvas drawing)))
-      (mapc (lambda (child)
-              (let* ((relative-coord (2dg-relative-coordinates prev-inner-canvas
-                                                               (2dd-geometry child)))
-                     (new-absolute-coord (2dg-absolute-coordinates new-inner-canvas
-                                                                   relative-coord)))
-                (2dd-update-plot child
-                                 new-absolute-coord
-                                 child-fn)))
-            child-drawings))))
+        (let ((new-inner-canvas (2dd-get-inner-canvas drawing)))
+          (mapc (lambda (child)
+                  (let* ((relative-coord (2dg-relative-coordinates prev-inner-canvas
+                                                                   (2dd-geometry child)))
+                         (new-absolute-coord (2dg-absolute-coordinates new-inner-canvas
+                                                                       relative-coord)))
+                    (2dd-update-plot child
+                                     new-absolute-coord
+                                     child-fn)))
+                child-drawings))
+        t)
+    nil))
 
-(cl-defgeneric 2dd-validate-containment ((parent 2dd-drawing) (sibling-drawings list) changed-geometry)
-  "Return non-nil if CHANGED-GEOMETRY is inside of PARENT's inner canvas and does not collide with any SIBLING-DRAWINGS.")
-(cl-defmethod 2dd-validate-containment ((parent 2dd-drawing) (sibling-drawings list) changed-geometry)
-  "Return non-nil if CHANGED-GEOMETRY is inside of PARENT's inner canvas and does not collide with any SIBLING-DRAWINGS."
-  (let ((parent-inner-canvas (2dd-get-inner-canvas parent)))
-    (if (not (2dg-contains parent-inner-canvas changed-geometry))
-        ;; not contained in the parent, invalid
-        nil
-      ;; contained in parent, evaluate any collisions with siblings
-      (cl-loop for sibling-drawing in sibling-drawings
-               for sibling-geometry = (2dd-geometry sibling-drawing)
-               when (2dg-has-intersection changed-geometry sibling-drawings 'strict)
-                do (cl-return nil)
-               finally return t))))
+(defun 2dd--validate-parent-containment (parent-drawing child-geometry)
+  "Return non-nil if CHILD-GEOMETRY is contained within PARENT-DRAWING, nil otherwise."
+  (let ((parent-inner-canvas (2dd-get-inner-canvas parent-drawing)))
+    (if (and parent-inner-canvas
+             (2dg-contains parent-inner-canvas child-geometry))
+        t
+      nil)))
 
+(defun 2dd--validate-exclusive (sibling-drawings changed-geometry)
+  "Return non-nil if CHANGED-GEOMETRY does not intersect (in any way) with sibling-drawings, nil otherwise."
+  (cl-loop for sibling-drawing in sibling-drawings
+           for sibling-geometry = (2dd-geometry sibling-drawing)
+           when (2dg-has-intersection changed-geometry sibling-geometry 'strict)
+             do (cl-return nil)
+           finally return t))
 
+(defun 2dd--validate-containment (parent-drawing sibling-drawings changed-geometry)
+  "Return non-nil if CHANGED-GEOMETRY is inside of PARENT-DRAWING's inner canvas and does not collide with any SIBLING-DRAWINGS.
+
+PARENT-DRAWING may be nil, sibling-drawings may be nil."
+  (and (or (null parent-drawing)
+           (2dd--validate-parent-containment parent-drawing changed-geometry))
+       (2dd--validate-exclusive sibling-drawings changed-geometry)))
 
 
 (provide '2dd-plotter)
