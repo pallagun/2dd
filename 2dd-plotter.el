@@ -272,6 +272,8 @@ had before."
   "Return non-nil if CHANGED-GEOMETRY is inside of PARENT-DRAWING's inner canvas and does not collide with any SIBLING-DRAWINGS.
 
 PARENT-DRAWING may be nil, sibling-drawings may be nil."
+  ;; TODO - this should pay attention to the drawing containment flags but currently is not.
+  ;; It should have a 'contained flag for checking containment within parent and an 'exclusive flag for checking non-intersection with siblings.
   (and (or (null parent-drawing)
            (2dd--validate-parent-containment parent-drawing changed-geometry))
        (2dd--validate-exclusive sibling-drawings changed-geometry)))
