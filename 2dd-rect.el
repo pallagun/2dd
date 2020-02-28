@@ -16,7 +16,7 @@
 (require '2dd-drawing)
 (require '2dd-scratch-render)
 
-(defclass 2dd-rect (2dd-with-inner-canvas 2dd-editable-drawing 2dd-with-label)
+(defclass 2dd-rect (2dd-with-inner-canvas 2dd-editable-drawing 2dd-with-label 2dd-with-parent-relative-location)
   ()
   :documentation "Represents a rectangle which can be drawn on a
 canvas.  It has an inner-canvas and a label")
@@ -29,9 +29,11 @@ canvas.  It has an inner-canvas and a label")
     (error "2dd-rect must use a 2dg-rect as their geometry")))
 (cl-defmethod 2dd-pprint ((rect 2dd-rect))
   "Pretty print RECT."
-  (format "dr:rect(%s:%s)"
-          (2dd-get-label rect)
-          (2dg-pprint (oref rect _geometry))))
+  (with-slots ((geo _geometry) (relative-geo _relative-geometry)) rect
+    (format "dr:rect(%s:g->%s:rg->%s)"
+            (2dd-get-label rect)
+            (2dg-pprint geo)
+            (if relative-geo (2dg-pprint relative-geo) nil))))
 (cl-defmethod 2dd-render ((rect 2dd-rect) scratch x-transformer y-transformer &rest style-plist)
   "Render RECT to SCRATCH buffer using X-TRANSFORMER and Y-TRANSFORMER.
 
@@ -45,6 +47,16 @@ Overridable method for ecah drawing to render itself."
           (x-max (funcall x-transformer (2dg-x-max rectg)))
           (y-min (funcall y-transformer (2dg-y-min rectg)))
           (y-max (funcall y-transformer (2dg-y-max rectg))))
+      ;; coordinate inversion - when it occurs just draw something tiny for now.
+      ;; todo: handle this better?
+      (when (> x-min x-max)
+        (let ((mid (round (/ (+ x-min x-max) 2.0))))
+          (setq x-min mid)
+          (setq x-max mid)))
+      (when (> y-min y-max)
+        (let ((mid (round (/ (+ y-min y-max) 2.0))))
+          (setq y-min mid)
+          (setq y-max mid)))
       (2dd---scratch-line-vert scratch x-min y-min y-max 2dd---vertical outline-style)
       (2dd---scratch-line-vert scratch x-max y-min y-max 2dd---vertical outline-style)
       (2dd---scratch-line-hori scratch x-min x-max y-min 2dd---horizontal outline-style)
@@ -70,7 +82,8 @@ Overridable method for ecah drawing to render itself."
                                        edit-idx-style)))
 
       ;; if there is a label, place it in the top left *pixel*
-      (when label
+      ;; Don't draw the label if there is no space (y-max == y-min => no space for label)
+      (when (and label (> y-max y-min))
         (let ((label-length (length label)))
           (when (> label-length 0)
             (let ((max-display-length (max 0 (- (- x-max x-min) 1))))
@@ -81,6 +94,15 @@ Overridable method for ecah drawing to render itself."
                                        (substring label 0 max-display-length)
                                      label)
                                    label-style))))))))
+(cl-defmethod 2dd-serialize-geometry ((rect 2dd-rect))
+  "Serialize RECT to a string.
+
+Returns a stringified list in one of two forms:
+('relative <RELATIVE-GEOMETRY>) or ('absolute <ABSOLUTE-GEOMETRY>)."
+  (let ((relative-geometry (2dd-get-relative-geometry rect)))
+    (prin1-to-string (if relative-geometry
+                         (list 'relative relative-geometry)
+                       (list 'absolute (2dd-geometry rect))))))
 
 (defsubst 2dd--clone-2dg-rect (any-rect)
   "Create a clone of ANY-RECT returning a 2dg-rect."
@@ -259,9 +281,11 @@ Return is of the form '(EDIT-IDX-NUM . EDIT-IDX-POINT)"
                       :x-max (- (2dg-x-max rectg) pad-x)
                       :y-min (+ (2dg-y-min rectg) pad-y)
                       :y-max (- (2dg-y-max rectg) pad-y))))
-(cl-defmethod 2dd-set-from ((drawing-rect 2dd-rect) (source-rect 2dg-rect))
-  "Set the x/y min/max coordinates of DRAWING-RECT to match SOURCE-RECT."
-  (with-slots ((rect _geometry)) drawing-rect
+(cl-defmethod 2dd-set-from ((drawing-rect 2dd-rect) (source-rect 2dg-rect) &optional parent-canvas)
+  "Set the x/y min/max coordinates of DRAWING-RECT to match SOURCE-RECT.
+
+When PARENT-CANVAS is supplied the relative coordinate will also be set.  If PARENT-CANVAS is not suppled any relative coordinates will be cleared."
+  (with-slots ((rect _geometry) (relative-rect _relative-geometry)) drawing-rect
     (if (null rect)
         ;; missing a rect entirely, create one.
         (setf rect (2dd--clone-2dg-rect source-rect))
@@ -269,7 +293,40 @@ Return is of the form '(EDIT-IDX-NUM . EDIT-IDX-POINT)"
       (oset rect x-min (oref source-rect x-min))
       (oset rect x-max (oref source-rect x-max))
       (oset rect y-min (oref source-rect y-min))
-      (oset rect y-max (oref source-rect y-max)))))
+      (oset rect y-max (oref source-rect y-max)))
+    (if parent-canvas
+        (let ((relative (2dg-relative-coordinates parent-canvas source-rect)))
+          (if (null relative-rect)
+              (setf relative-rect relative)
+            (oset relative-rect x-min (oref relative x-min))
+            (oset relative-rect x-max (oref relative x-max))
+            (oset relative-rect y-min (oref relative y-min))
+            (oset relative-rect y-max (oref relative y-max))))
+      ;; No parent provided, unable to compute relative coordinates.
+      ;; Best to clear them and not be wrong than leave them and be
+      ;; incorrect.
+      (setf relative-rect nil))))
+;; TODO - make a defgeneric for this.
+(cl-defmethod 2dd-handle-parent-change ((drawing 2dd-rect) (new-parent-canvas 2dd-canvas))
+  "Update DRAWING from stored relative coordinates to NEW-PARENT-CANVAS.
+
+Returns non-nil if the drawing was updated, nil if it was not
+able to be updated."
+  (with-slots ((drawing-rect _geometry) (drawing-relative _relative-geometry)) drawing
+    (if drawing-relative
+        ;; this drawing has a relative rect and can be updated relative to a parent.
+        (let ((absolute-rect (2dg-absolute-coordinates new-parent-canvas drawing-relative)))
+          (if (null drawing-rect)
+              ;; missing a rect entirely, create one.
+              (setf rect absolute-rect)
+            ;; rect exists, just set it.
+            (oset drawing-rect x-min (oref absolute-rect x-min))
+            (oset drawing-rect x-max (oref absolute-rect x-max))
+            (oset drawing-rect y-min (oref absolute-rect y-min))
+            (oset drawing-rect y-max (oref absolute-rect y-max)))
+          t)
+      nil)))
+
 (cl-defmethod 2dd-leaving-segment-collision-edge ((drawing-rect 2dd-rect) (pt 2dg-point))
   "If you leave centroid of RECT headed towards PT, which edge do you hit?
 

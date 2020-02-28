@@ -33,7 +33,7 @@
                       :x-max x-max
                       :y-min y-min
                       :y-max y-max)))
-(cl-defmethod 2dd-set-from ((drawing-rect 2dd-rect-container) (source-rect 2dg-rect))
+(cl-defmethod 2dd-set-from ((drawing-rect 2dd-rect-container) (source-rect 2dg-rect) &optional parent-canvas)
   "Set the x/y min/max coordinates of DRAWING-RECT to match SOURCE-RECT."
   (with-slots ((rect _geometry)) drawing-rect
     (if (null rect)

@@ -71,6 +71,16 @@ ARG can be used to pass in additional info to any rendering function.
 Overridable method for ecah drawing to render itself."
   (error "Unable to render drawing of type %s"
          (eieio-object-class-name drawing)))
+(cl-defgeneric 2dd-serialize-geometry ((drawing 2dd-drawing))
+  "Serialize DRAWING's geometry to a string for storage."
+  (error "Unable to 2dd-serialize object of type: %s"
+         (eieio-object-class-name drawing)))
+(cl-defgeneric 2dd-set-from ((drawing 2dd-drawing) source-geometry &optional parent-canvas)
+  "Set DRAWING's geometry from SOURCE-GEOMETETRY.
+
+When PARENT-CANVAS is suppled and the drawing is capable of holding relative coordinate they will be stored as well.")
+
+
 (cl-defmethod 2dd-num-edit-idxs ((drawing 2dd-drawing))
   "Non-editable drawings always have zero edit indices."
   0)
@@ -163,6 +173,16 @@ Return is of the form '(EDIT-IDX-NUM . EDIT-IDX-POINT)"
   (2dd-set-padding-horizontal drawing (float padding-horizontal))
   (2dd-set-padding-vertical drawing (float padding-vertical)))
 
+(defclass 2dd-with-parent-relative-location ()
+  ((_relative-geometry :initform nil
+                       :writer 2dd-set-relative-geometry
+                       :reader 2dd-get-relative-geometry
+                       :documentation "The 2dg object serving as a parent relative geometry"))
+  :abstract t
+  :documentation "When a drawing has a parent-relative-location class it will be used to set the actual geometry based off the parent and the relative geometry.")
+(defsubst 2dd-with-parent-relative-location-class-p (any)
+  "Equivalent of (object-of-class-p ANY '2dd-with-parent-relative-location)"
+  (object-of-class-p any '2dd-with-parent-relative-location))
 
 (provide '2dd-drawing)
 ;;; 2dd-drawing.el ends here
