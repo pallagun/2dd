@@ -5,22 +5,56 @@
 ;; function is resposible for real-time mouse dragging updates,
 ;; clicks, double clicks as well as providing hooks for mouse actions
 
+;;; Commentary:
+;; Currently the mouse handler only works with a 3 button mouse that
+;; has a single mouse wheel.  It will handle mouse-1,2 & 3 fully (with
+;; dragging) and mouse-4 and 5 for clicks only (4 and 5 seem to be
+;; mouse wheel movements).
+
+;; It also has an 'override' system where certain mouse actions can
+;; have their next event 'overridden' with different functionality.
+;; This is indented to be used for things such as default mouse
+;; behavior being one thing, but during a more complex user
+;; interaction (e.g link these 3 things together) the typical handler
+;; can be ignored and the override handler is called.
+;;
+;; An override handler is cleared out after it is called making it a
+;; one time override.  When the override handler is cleared the normal
+;; mouse handler resumes
+
 ;;; Code:
 (require '2dg)
 
-(defvar-local 2dd-mouse-preempts 'nil
-  "This variable holds an alist of the current mouse preempts.
+;; TODO - I'm not even sure if I need this....
+(defvar-local 2dd-mouse-enabled 't
+  "Enable flag for the mouse handler (should be set to 't or 'nil).
 
-A mouse preempt is a function called only once when a mouse-event
-of the specified type is clicked.  Preempts are used to
-facilitate GUI actions such as 'the arrow will end at the next
-drawing selected'.  In that case a preempt for (probably)
+This flag can be toggled whenever is needed to disable the mouse
+handler entirely.
+
+Things which may cause you to disable the mouse handler:
+- popup menus which work on mouse events.
+- Anything else that needs mouse input and you don't also want
+the mouse-handler working with that input.")
+(defvar-local 2dd-mouse-overrides 'nil
+  "This variable holds an alist of the current mouse overrides.
+
+A mouse override is a function called only once when a
+mouse-event of the specified type is clicked.  Overrides are used
+to facilitate GUI actions such as 'the arrow will end at the next
+drawing selected'.  In that case a override for (probably)
 'down-mouse-1 would be set to a function which completes an
 arrow's destination.  The mouse handler will call the function
-when it detects a 'mouse-down-1 event before calling the normal
-'mouse-down-1 event handler.  Once the mouse handler calls the
-preempt function it will be cleared from the preempt list so it
-is only called once.
+when it detects a 'mouse-down-1 event AND WILL NOT CALL THE
+NORMAL HANDLER.  Once the mouse handler calls the override
+function it will be cleared from the override list so it is only
+called once.
+
+Note: behavior is for a single mouse event.  A mouse click-drag
+event is multiple events so overridding mouse-down-X will only
+override the first event.  The subsequent mouse-drag-X events
+will still be handled normally (unless they also have an
+override).
 
 This variable is buffer local.")
 (defvar-local 2dd-mouse-last-clicked-pixel 'nil
@@ -44,40 +78,69 @@ there is no mouse movement (no dragging happened).
 Mouse button 2 and 3 have the same 3 valid actions with the expected names.
 
 - 'error : A special mouse hook, invoked when the mouse handler encounters an error.  This function will be called as (funcall FN ERROR-MESSAGE)")
-(defconst 2dd-valid-mouse-preempts
+(defconst 2dd-valid-mouse-overrides
   '(down-mouse-1)
   "These are all the valid mouse preempt types known to mouse handler.")
 
-(defun 2dd-mouse-set-preempt (preempt-type fn)
-  "Set the mouse preempt for action PREEMPT-TYPE to be FN."
-  (let ((existing (assq preempt-type 2dd-mouse-preempts)))
+(defsubst 2dd-mouse-set-enable (flag)
+  "Enable (if FLAG is non-nil) or disable (if FLAG is nil) the mouse handler."
+  (setq-local 2dd-mouse-enabled flag))
+
+(defun 2dd-mouse-set-override (type fn)
+  "Set the mouse override for mouse event TYPE to be FN."
+  (let ((existing (assq type 2dd-mouse-overrides)))
     (if existing
         (setcdr existing fn)
-      (setq 2dd-mouse-preempts (cons `(,preempt-type . ,fn) 2dd-mouse-preempts)))))
-(defsubst 2dd-mouse-clear-preempt (preempt-type)
-  "Remove the PREEMPT-TYPE preempt from the current mouse preempts."
-  (setq 2dd-mouse-preempts (assq-delete-all preempt-type 2dd-mouse-preempts)))
-(defsubst 2dd-mouse-clear-all-preempts ()
-  "Remove all elements from the current mouse preempts."
-  (setq 2dd-mouse-preempts nil))
-(defsubst 2dd-mouse-get-preempt (preempt-type)
-  "Return the function for PREEMPT-TYPE if there is any."
-  (let ((cell (assq preempt-type 2dd-mouse-preempts)))
-    (if cell
-        (cdr cell)
-      nil)))
-(defsubst 2dd--mouse-run-hook (type &rest args)
-  "This function will run mouse hook of TYPE with ARGS.
+      (setq 2dd-mouse-overrides
+            (cons `(,type . ,fn) 2dd-mouse-overrides)))))
+(defsubst 2dd-mouse-clear-override (type)
+  "Remove the mouse override for TYPE from the current overrides."
+  (setq 2dd-mouse-overrides (assq-delete-all type 2dd-mouse-overrides)))
+(defsubst 2dd-mouse-clear-all-overrides ()
+  "Remove all elements from the current mouse overrides."
+  (setq 2dd-mouse-overrides nil))
+(defun 2dd--mouse-run-hook-get-error (type &rest args)
+  "This function will run mouse hook (or override) of TYPE with ARGS.
 
-If the hook exists this function will return t.  If the hook does
-not exist and therefore nothing was run this function will return
-nil."
-  (let ((hook (assq type 2dd-mouse-hooks)))
-    (if hook
-        (progn
-          (apply (cdr hook) args)
-          t)
-      nil)))
+Any errors from the hook/override will be caught and returned as
+a string.  If there is any error detected, all mouse overrides
+will be cleared."
+  ;; (message "mouse hook: %s, %s" type args)
+  (let ((error-message))
+    (condition-case caught-error
+        (let ((override-hook (assq type 2dd-mouse-overrides)))
+          (if override-hook
+              ;; Override hook only
+              (progn
+                (apply (cdr override-hook) args)
+                (2dd-mouse-clear-override type))
+            ;; normal hook if found
+            (let ((hook (assq type 2dd-mouse-hooks)))
+              (when hook
+                (apply (cdr hook) args)))))
+      (error (progn
+               (2dd-mouse-clear-all-overrides)
+               (setq error-message (second caught-error)))))
+    error-message))
+;; (defsubst 2dd--mouse-run-hook (type &rest args)
+;;   "This function will run mouse hook of TYPE with ARGS.
+
+;; If the hook exists this function will return t.  If the hook does
+;; not exist and therefore nothing was run this function will return
+;; nil."
+;;   (error "But do you have an override though?")
+;;   (let ((hook (assq type 2dd-mouse-hooks)))
+;;     (if hook
+;;         (progn
+;;           (apply (cdr hook) args)
+;;           t)
+;;       nil)))
+(defsubst 2dd--mouse-handle-error (error-string)
+  "Handle this mouse error"
+  (let ((err-handler (assq 'error 2dd-mouse-hooks)))
+    (if err-handler
+        (funcall (cdr err-handler) error-string)
+      (error "Error from 2dd-mouse-handler: %s" error-string))))
 (defun 2dd--mouse-ignore-motion-send-error (bubble-up-error)
   "This function will absorb any mouse movement and signal an error afterwards.
 
@@ -87,13 +150,15 @@ It will"
       (while (and (setq event (read-event))
                   (mouse-movement-p event))
         nil))
-    (unless (2dd--run-mouse-hook 'error bubble-up-error)
-      (error "Error from 2dd-mouse-handler: %s" bubble-up-error))))
+    (2dd--mouse-handle-error bubble-up-error)))
 
-(defun 2dd-mouse-handler (event)
-  "Handle all mouse events of concern."
-  ;; TODO - Not sure if I'm approaching mouse handling properly.
+(defsubst 2dd-mouse-handler (event)
+  "Main entry point for mouse handling."
   (interactive "e")
+  (when 2dd-mouse-enabled
+    (2dd--mouse-handler-enabled event)))
+(defun 2dd--mouse-handler-enabled (event)
+  "Handle all mouse events of concern."
   ;; (message "mouse initial event: %s" event)
   (let ((bubble-up-error)
         (current-window (first (second event))))
@@ -106,65 +171,81 @@ It will"
                    (2dg-pixel :x (car col-row-cell)
                               :y (cdr col-row-cell))))))
       (let ((event-type (car event))
-            (drag-handler-type))
+            (drag-handler-type)
+            (start-pixel (pixel-from-event event)))
         ;; mouse down handlers
         ;; (message "(%s event-type %s)" (gensym) event-type)
+        (setq 2dd-mouse-last-clicked-pixel start-pixel)
+        (mouse-set-point event)
 
-        ;; This when condition both evaluates if the mouse event is
-        ;; acceptable to start drag monitoring as well as set the
-        ;; proper drag handler type.  It's not my best work...
-        (when (or (when (or (eq event-type 'down-mouse-1)
-                            (eq event-type 'double-down-mouse-1))
-                    (setq drag-handler-type 'drag-increment-mouse-1))
-                  (when (or (eq event-type 'down-mouse-2)
-                            (eq event-type 'double-down-mouse-2))
-                    (setq drag-handler-type 'drag-increment-mouse-2))
-                  (when (or (eq event-type 'down-mouse-3)
-                            (eq event-type 'double-down-mouse-3))
-                    (setq drag-handler-type 'drag-increment-mouse-3)))
+        ;; This condition evaluates if the mouse event is acceptable
+        ;; to start drag monitoring and sets the drag handler type.
+        (cond ((or (eq event-type 'down-mouse-1)
+                   (eq event-type 'double-down-mouse-1))
+               (setq drag-handler-type 'drag-increment-mouse-1))
+              ((or (eq event-type 'down-mouse-2)
+                   (eq event-type 'double-down-mouse-2))
+               (setq drag-handler-type 'drag-increment-mouse-2))
+              ((or (eq event-type 'down-mouse-3)
+                  (eq event-type 'double-down-mouse-3))
+               (setq drag-handler-type 'drag-increment-mouse-3)))
+
+        ;; TODO - this needs a refactor at this point.
+        (if (null drag-handler-type)
+            ;; This mouse event is not one monitored for dragging
+            ;; (e.g. mouse-wheel-up and mouse-wheel-down).  Simply
+            ;; call the hook and finish.
+            (let ((bubble-up-error (2dd--mouse-run-hook-get-error event-type
+                                                                  start-pixel
+                                                                  nil
+                                                                  nil)))
+              (when bubble-up-error
+                (2dd--mouse-handle-error bubble-up-error)))
+
+          ;; This mouse event supports dragging, begin dragging code.
           ;; (message "%s down" scxml-test-counter)
-          (mouse-set-point event)
-          (let* ((start-pixel (pixel-from-event event))
-                 (last-pixel start-pixel)
+          (let* ((last-pixel start-pixel)
                  (is-drag)
                  (event-count 0))
-            (setq 2dd-mouse-last-clicked-pixel start-pixel)
+            ;; Preempt down-mouse-1 - TODO - relocate this.
+            (setq bubble-up-error (2dd--mouse-run-hook-get-error event-type
+                                                                 start-pixel
+                                                                 nil
+                                                                 nil))
+            ;; (when (eq event-type 'down-mouse-1)
+            ;;   (let ((down-mouse-1-preempt (2dd-mouse-get-preempt 'down-mouse-1)))
+            ;;     (when down-mouse-1-preempt
+            ;;       ;; if a mouse-down event causes an error and aborts this
+            ;;       ;; function the error will be displayed.  At that point
+            ;;       ;; when the mouse is released another event will be
+            ;;       ;; generated (a mouse click event, which I'm starting to
+            ;;       ;; understand is a bit more of a mouse-up event).  That
+            ;;       ;; mouse-click(mouse-up) event is another event and will
+            ;;       ;; clear the error displayed in the minibuffer.
+            ;;       ;; However, I wish to show the error message from the
+            ;;       ;; mouse-down event in the minibuffer after the mouse is
+            ;;       ;; released.  Therefore I will catch any errors from the
+            ;;       ;; mouse-down event here, allow the (track-mouse) form
+            ;;       ;; below to catch all mouse movement and even the
+            ;;       ;; mouse-click (mouse-up) event later.  After all mouse
+            ;;       ;; interactions I will then display the error.
+            ;;       ;;
+            ;;       ;; So
+            ;;       ;; - mouse down
+            ;;       ;; -  error generated -> capture error
+            ;;       ;; - enter (track-mouse) form which takes no actions and simply absorbs mouse events
+            ;;       ;; -  when that (track-mouse) form detects a click (mouse-up) exit.
+            ;;       ;; - Execute no functionality but finally signal the error captured.
+            ;;       (condition-case caught-error
+            ;;           (progn
+            ;;             (funcall down-mouse-1-preempt start-pixel)
+            ;;             (2dd-mouse-clear-preempt 'down-mouse-1))
+            ;;         (error (progn
+            ;;                  (2dd-mouse-clear-all-preempts)
+            ;;                  (setq bubble-up-error (second caught-error)))))
+            ;;       (setq event-count 1))))
 
-            ;; Preempt down-mouse-1
-            (when (eq event-type 'down-mouse-1)
-              (let ((down-mouse-1-preempt (2dd-mouse-get-preempt 'down-mouse-1)))
-                (when down-mouse-1-preempt
-                  ;; if a mouse-down event causes an error and aborts this
-                  ;; function the error will be displayed.  At that point
-                  ;; when the mouse is released another event will be
-                  ;; generated (a mouse click event, which I'm starting to
-                  ;; understand is a bit more of a mouse-up event).  That
-                  ;; mouse-click(mouse-up) event is another event and will
-                  ;; clear the error displayed in the minibuffer.
-                  ;; However, I wish to show the error message from the
-                  ;; mouse-down event in the minibuffer after the mouse is
-                  ;; released.  Therefore I will catch any errors from the
-                  ;; mouse-down event here, allow the (track-mouse) form
-                  ;; below to catch all mouse movement and even the
-                  ;; mouse-click (mouse-up) event later.  After all mouse
-                  ;; interactions I will then display the error.
-                  ;;
-                  ;; So
-                  ;; - mouse down
-                  ;; -  error generated -> capture error
-                  ;; - enter (track-mouse) form which takes no actions and simply absorbs mouse events
-                  ;; -  when that (track-mouse) form detects a click (mouse-up) exit.
-                  ;; - Execute no functionality but finally signal the error captured.
-                  (condition-case caught-error
-                      (progn
-                        (funcall down-mouse-1-preempt start-pixel)
-                        (2dd-mouse-clear-preempt 'down-mouse-1))
-                    (error (progn
-                             (2dd-mouse-clear-all-preempts)
-                             (setq bubble-up-error (second caught-error)))))
-                  (setq event-count 1))))
-
-            (2dd--mouse-run-hook event-type start-pixel nil nil)
+            ;; (2dd--mouse-run-hook event-type start-pixel nil nil)
 
             (if bubble-up-error
                 ;; there was an error, eat up all mouse motion and send the error.
@@ -172,7 +253,8 @@ It will"
               ;; No error, track the mouse motion if there is any.
               (track-mouse
                 ;; real mouse track-mouse form - no errors have yet happened.
-                (while (and (setq event (read-event))
+                (while (and (null bubble-up-error)
+                            (setq event (read-event))
                             (mouse-movement-p event))
                   (setq is-drag t)
                   ;; (message "mouse track event: %s" event)
@@ -187,19 +269,23 @@ It will"
                              (total-delta (2dg-subtract current-pixel start-pixel)))
 
                         ;; call some drag handler
-                        (2dd--mouse-run-hook drag-handler-type
-                                             current-pixel
-                                             current-delta
-                                             total-delta))
+                        (setq bubble-up-error (2dd--mouse-run-hook-get-error drag-handler-type
+                                                                             current-pixel
+                                                                             current-delta
+                                                                             total-delta)))
                       (setq last-pixel current-pixel)))))
-              (setq event-type (car event))
-              (setq 2dd-mouse-last-clicked-pixel (pixel-from-event event))
-              ;; (message "mouse post-drag event: %s" event)
-              ;; this will either be a mouse-1,2 or 3 event.  It will
-              ;; not be a drag event so I won't be sending any drag
-              ;; delta information.
-              (2dd--mouse-run-hook (car event) 2dd-mouse-last-clicked-pixel nil nil)
-              )))))))
+              (if bubble-up-error
+                  (2dd--mouse-ignore-motion-send-error bubble-up-error)
+                (setq event-type (car event))
+                (setq 2dd-mouse-last-clicked-pixel (pixel-from-event event))
+                ;; (message "mouse post-drag event: %s" event)
+                ;; this will either be a mouse-1,2 or 3 event.  It will
+                ;; not be a drag event so I won't be sending any drag
+                ;; delta information.
+                (setq bubble-up-error (2dd--mouse-run-hook-get-error (car event) 2dd-mouse-last-clicked-pixel nil nil))
+                (when bubble-up-error
+                  (2dd--mouse-ignore-motion-send-error bubble-up-error))
+              ))))))))
 
 (provide '2dd-mouse-handler)
 ;;; 2dd-mouse-handler.el ends here

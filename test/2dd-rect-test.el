@@ -8,7 +8,7 @@
                                             :x-max 10.0
                                             :y-min 2.0
                                             :y-max 20.0)
-                        :containment 'captive))
+                        :constraint 'captive))
         (move-delta (2dg-point- 3 4)))
     (let ((moved-geometry (2dd-build-move-edited-geometry rect move-delta)))
       ;; ensure the original rect has not changed.
@@ -20,7 +20,7 @@
 
       (should (eq (2dd-get-edit-idx rect) 5))
       (should (equal (2dd-get-label rect) "test"))
-      (should (eq (2dd-containment rect) 'captive))
+      (should (eq (2dd-get-constraint rect) 'captive))
 
       ;; ensure the moved rect is correct.
       (should (eql (2dg-x-min moved-geometry) 4.0))

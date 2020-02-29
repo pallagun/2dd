@@ -8,13 +8,33 @@
 (require '2dd-canvas)
 (require '2dd-viewport)
 
+(defconst 2dd-valid-constraints
+  '(free
+    captive
+    exclusive
+    captive+exclusive)
+  "Possible constrant settings for a 2dd-drawing
+
+free: This drawing is not subject to any constraints.
+
+captive: This is a drawing which is constrained to be inside of a
+parent drawing.  An example would be a 'child' rectangle which
+must be inside of a 'parent' rectangle.
+
+exclusive: This is a drawing which is constrained to never
+intersect any other drawing with the same parent.  No two
+drawings which are exclusive and have the same parent may never
+overlap partially or fully.
+
+captive+exclusive: This uses the captive and exclusive
+constraints at the same time.")
+
 (defclass 2dd-drawing ()
-  ((_containment :initarg :containment
-                 :reader 2dd-containment
-                 :writer 2dd-set-containment
-                 :initform 'captive
-                 :type symbolp
-                 :documentation "Containment must be one of (captive, free, semicaptive)")
+  ((_constraint :initarg :constraint
+                :reader 2dd-get-constraint
+                :writer 2dd-set-constraint
+                :type symbolp
+                :documentation "Constraints must be one of tContainment must be one of (captive, free, semicaptive)")
    (_geometry :initarg :geometry
               :initform nil
               :writer 2dd-set-geometry
@@ -22,11 +42,12 @@
               :documentation "The 2dg object backing this drawing"))
   :abstract t
   :documentation "This is a thing which can be drawn.  A rectangle, an arrow, a label, etc.")
-(cl-defmethod 2dd-set-containment :before ((this 2dd-drawing) value)
-  "Set the containment flag for THIS to VALUE after validation."
-  (unless (memq value '(captive free semicaptive))
-    (error "Invalid containment value: %s, must be one of (captive, free, semicaptive)"
-           value)))
+(cl-defmethod 2dd-set-constraint :before ((this 2dd-drawing) value)
+  "Set the constraint flag for THIS to VALUE after validation."
+  (unless (memq value 2dd-valid-constraints)
+    (error "Invalid containment value: %s, must be one of %s"
+           value
+           2dd-valid-constraints)))
 (cl-defgeneric 2dd-num-edit-idxs ((drawing 2dd-drawing))
   "How many edit idx points are there for this DRAWING.  It may be zero")
 (cl-defgeneric 2dd-edit-idx-point ((drawing 2dd-drawing) (idx integer))
@@ -107,6 +128,9 @@ By default, drawings do not have inner-canvases."
               zero and count up."))
   :abstract t
   :documentation "A drawing which can have its shape edited.")
+(defsubst 2dd-editable-drawing-class-p (any)
+  "Equivalent of (object-of-class-p ANY '2dd-editable-drawing)."
+  (object-of-class-p any '2dd-editable-drawing))
 (cl-defgeneric 2dd-build-idx-edited-geometry ((drawing 2dd-editable-drawing) (edit-idx integer) (move-vector 2dg-point))
   "Return new geometry based off moving EDIT-IDX of DRAWING by MOVE-VECTOR.
 

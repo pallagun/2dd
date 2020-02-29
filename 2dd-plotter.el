@@ -232,18 +232,47 @@ When plotting in simple grid mode:
 (cl-defgeneric 2dd-update-plot ((drawing 2dd-drawing) new-geometry child-fn &optional parent-drawing sibling-drawings)
   "Update DRAWING to have NEW-GEOMETRY.
 
-Returns non-nil on sucessful update, nil on failure.")
+This function should be called when a user desires that DRAWING
+changes to have the geometry of NEW-GEOMETRY.  Returns non-nil on
+sucessful update, nil on failure.
+
+CHILD-FN should produce a list of all child drawings of a given
+parent drawing.  It will be called as: (funcall CHILD-FN
+ROOT-DRAWING).
+
+PARENT-DRAWING and SIBLING-DRAWINGS are used to ensure any
+drawing constraints are not invalidated by the NEW-GEOMETRY.
+PARENT-DRAWING will be used to ensure that NEW-GEOMETRY is
+entirely contained if the drawing is set to have such a
+constraint.  SIBLING-DRAWINGS will be used to ensure that
+NEW-GEOMETRY does not have any collision if the drawing is set to
+have such a constraint.
+
+This function wil alter all child drawings of DRAWING as needed
+to maintain relative positions and enforce desired constraints.")
 (cl-defmethod 2dd-update-plot ((drawing 2dd-drawing) new-geometry child-fn &optional parent-drawing sibling-drawings)
   "Update DRAWING to have NEW-GEOMETRY.
 
-Returns non-nil on sucessful update, nil on failure.  This
-function should be called when user input causes a drawing to
-have it's geometry modified.
+This function should be called when a user desires that DRAWING
+changes to have the geometry of NEW-GEOMETRY.  Returns non-nil on
+sucessful update, nil on failure.
 
-This function will edit all child (or contained) drawings of
-DRAWING to take on the same relative position to DRAWING as they
-had before."
-  (if (2dd--validate-containment parent-drawing
+CHILD-FN should produce a list of all child drawings of a given
+parent drawing.  It will be called as: (funcall CHILD-FN
+ROOT-DRAWING).
+
+PARENT-DRAWING and SIBLING-DRAWINGS are used to ensure any
+drawing constraints are not invalidated by the NEW-GEOMETRY.
+PARENT-DRAWING will be used to ensure that NEW-GEOMETRY is
+entirely contained if the drawing is set to have such a
+constraint.  SIBLING-DRAWINGS will be used to ensure that
+NEW-GEOMETRY does not have any collision if the drawing is set to
+have such a constraint.
+
+This function wil alter all child drawings of DRAWING as needed
+to maintain relative positions and enforce desired constraints."
+  (if (2dd--validate-containment (2dd-get-constraint drawing)
+                                 parent-drawing
                                  sibling-drawings
                                  new-geometry)
       ;; new geometry is validated - allow the update
@@ -254,7 +283,6 @@ had before."
                                  (2dd-get-inner-canvas parent-drawing))
                                t)
     nil))
-
 (defun 2dd--update-plot-worker (drawing new-geometry child-fn parent-canvas &optional force-set)
   "Update child drawings after their parent is modified."
   (let ((child-drawings (funcall child-fn drawing))
@@ -286,22 +314,47 @@ had before."
       ;; When there are no children, report success.
       t)))
 
-(defun 2dd--validate-containment (parent-drawing sibling-drawings changed-geometry)
+(cl-defgeneric 2dd-validate-constraints ((drawing 2dd-drawing) (parent 2dd-drawing) (siblings list))
+  "Validate that DRAWING satisfies all constrants relative to PARENT and SIBLINGS.
+
+PARENT must be the parent of DRAWING and must exist.  SIBLINGS
+must be a list of 2dd-drawing objects and may be empty.")
+(cl-defmethod 2dd-validate-constraints ((drawing 2dd-drawing) (parent 2dd-drawing) (siblings list))
+  "Validate that DRAWING satisfies all constrants relative to PARENT and SIBLINGS.
+
+PARENT must be the parent of DRAWING and must exist.  SIBLINGS
+must be a list of 2dd-drawing objects and may be empty."
+  (2dd--validate-containment (2dd-get-constraint drawing)
+                             parent
+                             siblings
+                             (2dd-geometry drawing)))
+
+(defun 2dd--validate-containment (constraint parent-drawing sibling-drawings changed-geometry)
   "Return non-nil if CHANGED-GEOMETRY is inside of PARENT-DRAWING's inner canvas and does not collide with any SIBLING-DRAWINGS.
 
 PARENT-DRAWING may be nil, sibling-drawings may be nil."
   ;; TODO - this should pay attention to the drawing containment flags but currently is not.
   ;; It should have a 'contained flag for checking containment within parent and an 'exclusive flag for checking non-intersection with siblings.
-  (and (or (null parent-drawing)
-           (2dd--validate-parent-containment parent-drawing changed-geometry))
-       (2dd--validate-exclusive sibling-drawings changed-geometry)))
+  (cond ((eq constraint 'captive+exclusive)
+         (and (2dd--validate-parent-containment parent-drawing changed-geometry)
+              (2dd--validate-exclusive sibling-drawings changed-geometry)))
+        ((eq constraint 'captive)
+         (2dd--validate-parent-containment parent-drawing changed-geometry))
+        ((eq constraint 'exclusive)
+         (2dd--validate-exclusive sibling-drawings changed-geometry))
+        (t
+         t)))
 (defun 2dd--validate-parent-containment (parent-drawing child-geometry)
   "Return non-nil if CHILD-GEOMETRY is contained within PARENT-DRAWING, nil otherwise."
-  (let ((parent-inner-canvas (2dd-get-inner-canvas parent-drawing)))
-    (if (and parent-inner-canvas
-             (2dg-contains parent-inner-canvas child-geometry))
-        t
-      nil)))
+  (if parent-drawing
+      ;; You have a parent drawing, check for containment
+      (let ((parent-inner-canvas (2dd-get-inner-canvas parent-drawing)))
+        (if (and parent-inner-canvas
+                 (2dg-contains parent-inner-canvas child-geometry))
+            t
+          nil))
+    ;; No parent drawing provided, unable to validate constraint, assume failure
+    nil))
 (defun 2dd--validate-exclusive (sibling-drawings changed-geometry)
   "Return non-nil if CHANGED-GEOMETRY does not intersect (in any way) with sibling-drawings, nil otherwise."
   (cl-loop for sibling-drawing in sibling-drawings
