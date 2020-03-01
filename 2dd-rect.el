@@ -32,7 +32,7 @@ canvas.  It has an inner-canvas and a label")
   (with-slots ((geo _geometry) (relative-geo _relative-geometry)) rect
     (format "dr:rect(%s:g->%s:rg->%s)"
             (2dd-get-label rect)
-            (2dg-pprint geo)
+            (if geo (2dg-pprint geo) nil)
             (if relative-geo (2dg-pprint relative-geo) nil))))
 (cl-defmethod 2dd-render ((rect 2dd-rect) scratch x-transformer y-transformer &rest style-plist)
   "Render RECT to SCRATCH buffer using X-TRANSFORMER and Y-TRANSFORMER.
@@ -98,11 +98,11 @@ Overridable method for ecah drawing to render itself."
   "Serialize RECT to a string.
 
 Returns a stringified list in one of two forms:
-('relative <RELATIVE-GEOMETRY>) or ('absolute <ABSOLUTE-GEOMETRY>)."
+(:relative <RELATIVE-GEOMETRY>) or (:absolute <ABSOLUTE-GEOMETRY>)."
   (let ((relative-geometry (2dd-get-relative-geometry rect)))
     (prin1-to-string (if relative-geometry
-                         (list 'relative relative-geometry)
-                       (list 'absolute (2dd-geometry rect))))))
+                         (list :relative relative-geometry)
+                       (list :absolute (2dd-geometry rect))))))
 
 (defsubst 2dd--clone-2dg-rect (any-rect)
   "Create a clone of ANY-RECT returning a 2dg-rect."
@@ -151,7 +151,7 @@ Points start at the bottom left and go counter clock wise."
      (7 (2dg-point :x x-min :y (/ (+ y-max y-min) 2.0)))
      ;; err
      (otherwise (error "Invalid edit-mode idx: %s" idx)))))
-(cl-defmethod 2dd-get-closest-edit-idx ((rect 2dd-editable-drawing) (point 2dg-point))
+(cl-defmethod 2dd-get-closest-edit-idx ((rect 2dd-rect) (point 2dg-point))
   "Return RECT's closest edit-idx to POINT.
 
 Return is of the form '(EDIT-IDX-NUM . EDIT-IDX-POINT)"
@@ -169,11 +169,6 @@ Return is of the form '(EDIT-IDX-NUM . EDIT-IDX-POINT)"
                       best-distance distance)
              finally return `(,best-idx . ,best-idx-pt))))
 
-;; (cl-defmethod 2dd-build-move-edited ((rect 2dd-rect) (move-vector 2dg-point) (viewport 2dd-viewport))
-;;   "Given a RECT, and a MOVE-DIRECTION, move in one pixel in that direction."
-;;   (let ((moved (clone rect)))
-;;     (oset moved _geometry (2dg-add (oref rect _geometry) move-vector))
-;;     moved))
 (cl-defmethod 2dd-build-move-edited-geometry ((rect 2dd-rect) (move-vector 2dg-point))
   "Given a RECT, and a MOVE-DIRECTION, move in one pixel in that direction."
   (2dg-add (oref rect _geometry) move-vector))
@@ -224,52 +219,8 @@ Return is of the form '(EDIT-IDX-NUM . EDIT-IDX-POINT)"
                       :y-min y-min :y-max y-max)
           nil)))))
 
-;; (cl-defmethod 2dd-build-idx-edited ((rect 2dd-rect) (edit-idx integer) (move-vector 2dg-point) (viewport 2dd-viewport))
-;;   "Build a rectangle drawing based off RECT having EDIT-IDX moved by MOVE-VECTOR."
-;;   (let ((horizontal-pts)
-;;         (vertical-pts)
-;;         (rectg (oref rect _geometry)))
-;;     (let ((pts (2dg-bounding-pts rectg)))
-;;       (cond ((equal 0 edit-idx)           ;bottom left
-;;              (setq horizontal-pts (list (first pts) (fourth pts)))
-;;              (setq vertical-pts (list (first pts) (second pts))))
-;;             ((equal 1 edit-idx)           ;bottom edge
-;;              (setq vertical-pts (list (first pts) (second pts))))
-;;             ((equal 2 edit-idx)           ;bottom right
-;;              (setq horizontal-pts (list (second pts) (third pts)))
-;;              (setq vertical-pts (list (first pts) (second pts))))
-;;             ((equal 3 edit-idx)           ;right edge
-;;              (setq horizontal-pts (list (second pts) (third pts))))
-;;             ((equal 4 edit-idx)           ;top right
-;;              (setq horizontal-pts (list (second pts) (third pts)))
-;;              (setq vertical-pts (list (third pts) (fourth pts))))
-;;             ((equal 5 edit-idx)           ;top
-;;              (setq vertical-pts (list (third pts) (fourth pts))))
-;;             ((equal 6 edit-idx)           ;top left
-;;              (setq horizontal-pts (list (first pts) (fourth pts)))
-;;              (setq vertical-pts (list (third pts) (fourth pts))))
-;;             ((equal 7 edit-idx)           ;left edge
-;;              (setq horizontal-pts (list (first pts) (fourth pts))))
-;;             ('t
-;;              (error "Invalid edit-idx for 2dd-rect: %s" edit-idx)))
-;;       (with-slots (x y) move-vector
-;;         (when (and horizontal-pts (not (equal x 0.0)))
-;;           (cl-loop for pt in horizontal-pts
-;;                    for delta-x = (2dg-x pt)
-;;                    do (oset pt x (+ delta-x x))))
-;;         (when (and vertical-pts (not (equal y 0.0)))
-;;           (cl-loop for pt in vertical-pts
-;;                    for delta-y = (2dg-y pt)
-;;                    do (oset pt y (+ delta-y y)))))
-;;       (let ((moved (clone rect)))
-;;         (oset moved _geometry (2dg-rect :y-min (2dg-y (first pts))
-;;                                         :y-max (2dg-y (third pts))
-;;                                         :x-min (2dg-x (first pts))
-;;                                         :x-max (2dg-x (second pts))))
-;;         moved))))
-
 (cl-defmethod 2dd-has-inner-canvas-p ((rect 2dd-rect))
-  "Given a rectangle RECT, produce its inner canvas."
+  "Return non-nil if RECT has an inner-canvas.  Will always be 't."
   t)
 (cl-defmethod 2dd-get-inner-canvas ((rect 2dd-rect))
   "Return the inner canvas of RECT."
@@ -284,7 +235,9 @@ Return is of the form '(EDIT-IDX-NUM . EDIT-IDX-POINT)"
 (cl-defmethod 2dd-set-from ((drawing-rect 2dd-rect) (source-rect 2dg-rect) &optional parent-canvas)
   "Set the x/y min/max coordinates of DRAWING-RECT to match SOURCE-RECT.
 
-When PARENT-CANVAS is supplied the relative coordinate will also be set.  If PARENT-CANVAS is not suppled any relative coordinates will be cleared."
+When PARENT-CANVAS is supplied the relative coordinate will also
+be set.  If PARENT-CANVAS is not suppled any relative coordinates
+will be cleared."
   (with-slots ((rect _geometry) (relative-rect _relative-geometry)) drawing-rect
     (if (null rect)
         ;; missing a rect entirely, create one.

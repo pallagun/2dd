@@ -184,7 +184,9 @@ Return is of the form '(EDIT-IDX-NUM . EDIT-IDX-POINT)"
   :abstract t
   :documentation "When a drawing has an inner canvas this class holds the current plotting information relevant to child drawings.")
 (cl-defmethod 2dd-has-inner-canvas-p ((drawing-with-inner 2dd-with-inner-canvas))
-  "Drawings declared to have an inner canavs will return 't here."
+  "Drawings declared to have an inner canavs will return 't here.
+
+TODO - This could be overridden, I'm not sure if I ever want that.  Figure that out."
   t)
 (cl-defgeneric 2dd-get-inner-canvas ((drawing-with-inner 2dd-with-inner-canvas))
   "Return the current inner canvas of DRAWING-WITH-INNER.")
