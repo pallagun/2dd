@@ -94,16 +94,18 @@ Overridable method for ecah drawing to render itself."
                                        (substring label 0 max-display-length)
                                      label)
                                    label-style))))))))
-(cl-defmethod 2dd-serialize-geometry ((rect 2dd-rect))
+(cl-defmethod 2dd-serialize-geometry ((rect 2dd-rect) &optional additional-info)
   "Serialize RECT to a string.
 
 Returns a stringified list in one of two forms:
 (:relative <RELATIVE-GEOMETRY>) or (:absolute <ABSOLUTE-GEOMETRY>)."
-  (let ((relative-geometry (2dd-get-relative-geometry rect)))
-    (prin1-to-string (if relative-geometry
-                         (list :relative relative-geometry)
-                       (list :absolute (2dd-geometry rect))))))
-
+  (let* ((relative-geometry (2dd-get-relative-geometry rect))
+         (output-list (if relative-geometry
+                          (list :relative relative-geometry)
+                        (list :absolute (2dd-geometry rect)))))
+    (prin1-to-string (if additional-info
+                         (nconc output-list additional-info)
+                       output-list))))
 (defsubst 2dd--clone-2dg-rect (any-rect)
   "Create a clone of ANY-RECT returning a 2dg-rect."
   (2dg-rect :x-min (2dg-x-min any-rect)

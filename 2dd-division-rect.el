@@ -15,7 +15,7 @@
 (require '2dd-scratch-render)
 (require '2dd-rect)
 
-(defclass 2dd-division-rect (2dd-rect)
+(defclass 2dd-division-rect (2dd-with-divided-inner-canvas 2dd-rect)
   ((_divisons :initform nil
               :reader 2dd-get-divisions
               :writer 2dd-set-divisions
@@ -31,13 +31,17 @@
 drawn on a canvas.  It has an inner-canvas and a label.  The
 container rectangle has a number of inner rectangles which can be
 arranged to desired shapes though they are constrained to consume
-all the inner space of the container rectangle.")
+all the inner space of the container rectangle.
+
+Note: the geometry slot for a division-rect is a cons cell where
+the cdr is a normal rectangle and the cdr is a description of the
+divisions inside the main rectangle.")
 (defsubst 2dd-division-rect-class-p (any)
   "Equivalent of (object-of-class-p ANY '2dd-rect)"
   (object-of-class-p any '2dd-division-rect))
-(cl-defmethod 2dd-set-geometry :before ((this 2dd-division-rect) value)
-  "Restrict THIS to have a VALUE which is of type 2dg-rect."
-  (error "Currently unable to set geometry for a division-rect"))
+(cl-defmethod 2dd-set-geometry ((this 2dd-division-rect) value)
+  ;; for now this just forwards to 2dd-rect
+  (cl-call-next-method))
 (cl-defmethod 2dd-pprint ((rect 2dd-division-rect))
   "Pretty print RECT."
   (with-slots ((geo _geometry) (relative-geo _relative-geometry)) rect
@@ -50,8 +54,66 @@ all the inner space of the container rectangle.")
   "Render RECT to SCRATCH buffer using X-TRANSFORMER and Y-TRANSFORMER.
 
 Overridable method for ecah drawing to render itself."
-  (error "Can't currently render a divison rect"))
-(cl-defmethod 2dd-serialize-geometry ((rect 2dd-division-rect))
+  (let ((rectg (2dd-geometry rect))
+        (divisiong (2dd-get-divisions rect))
+        (label (2dd-get-label rect))
+        (outline-style (plist-get style-plist :outline-style))
+        (label-style (plist-get style-plist :label-style))
+        (edit-idx-style (plist-get style-plist :edit-idx-style)))
+    (let ((x-min (funcall x-transformer (2dg-x-min rectg)))
+          (x-max (funcall x-transformer (2dg-x-max rectg)))
+          (y-min (funcall y-transformer (2dg-y-min rectg)))
+          (y-max (funcall y-transformer (2dg-y-max rectg))))
+      ;; coordinate inversion - when it occurs just draw something tiny for now.
+      ;; todo: handle this better?
+      ;; TODO - this shares a lot with the rect code - I should subfunction that out at some point.
+      (when (> x-min x-max)
+        (let ((mid (round (/ (+ x-min x-max) 2.0))))
+          (setq x-min mid)
+          (setq x-max mid)))
+      (when (> y-min y-max)
+        (let ((mid (round (/ (+ y-min y-max) 2.0))))
+          (setq y-min mid)
+          (setq y-max mid)))
+      (2dd---scratch-line-vert scratch x-min y-min y-max 2dd---vertical outline-style)
+      (2dd---scratch-line-vert scratch x-max y-min y-max 2dd---vertical outline-style)
+      (2dd---scratch-line-hori scratch x-min x-max y-min 2dd---horizontal outline-style)
+      (2dd---scratch-line-hori scratch x-min x-max y-max 2dd---horizontal outline-style)
+      ;; if there is an edit idx set, draw the edit idx points
+      (when (2dd-get-edit-idx rect)
+        (cl-loop for point in (2dd-edit-idx-points rect)
+                 for marker-char in (list 2dd---arrow-any
+                                          2dd---arrow-down
+                                          2dd---arrow-any
+                                          2dd---arrow-right
+                                          2dd---arrow-any
+                                          2dd---arrow-up
+                                          2dd---arrow-any
+                                          2dd---arrow-left
+                                          2dd---arrow-any)
+                 for x-scratch = (funcall x-transformer (2dg-x point))
+                 for y-scratch = (funcall y-transformer (2dg-y point))
+                 do (2dd---scratch-set scratch
+                                       x-scratch
+                                       y-scratch
+                                       marker-char
+                                       edit-idx-style)))
+
+      ;; if there is a label, place it above the top top left *pixel*
+      ;; Don't draw the label if there is no space (y-max == y-min => no space for label)
+      (when (and label (> y-max y-min))
+        (let ((label-length (length label)))
+          (when (> label-length 0)
+            (let ((max-display-length (max 0 (- (- x-max x-min) 1))))
+              (2dd---scratch-label scratch
+                                   (1+ x-min)
+                                   (1+ y-max)
+                                   (if (> label-length max-display-length)
+                                       (substring label 0 max-display-length)
+                                     label)
+                                   label-style))))))))
+
+(cl-defmethod 2dd-serialize-geometry ((rect 2dd-division-rect) &optional additional-info)
   "Serialize RECT to a string.
 
 Returns a stringified list in one of two forms:
@@ -60,8 +122,10 @@ Returns a stringified list in one of two forms:
 
 <DIVISIONS> is a list of all divison rectangles in
 <RELATIVE-GEOMETRY> form."
-  (nconc (cl-call-next-method)
-         :divisions 'I-should-put-divisions-here))
+  (let ((division-info `(:divisions ,(2dd-get-divisions rect))))
+    (if additional-info
+        (cl-call-next-method rect (nconc division-info additional-info))
+      (cl-call-next-method rect division-info))))
 
 (defun 2dd--split-on-overlaps (primary other)
   "Separate OTHER (a segment) into pices that do and do not intersect PRIMARY (a segment).
@@ -232,14 +296,16 @@ Points start at the bottom left and go counter clock wise."
     (error "Currently can't tell you where edit-idxs over 7 are.")))
 
 (cl-defmethod 2dd-build-idx-edited-geometry ((rect 2dd-division-rect) (edit-idx integer) (move-vector 2dg-point))
-  (if (< idx 8)
+
+  (if (< edit-idx 8)
       (cl-call-next-method)
     (error "Currently can't edit a drawing for an index over 7")))
 (cl-defmethod 2dd-has-inner-canvas-p ((rect 2dd-division-rect))
   "Given a rectangle RECT, produce its inner canvas."
-  nil)
+  t)
 (cl-defmethod 2dd-get-inner-canvas ((rect 2dd-division-rect))
   "Return the inner canvas of RECT.
+
 Note: a division rect has NO padding and NO interdivision padding"
   (let ((rectg (2dd-geometry rect)))
     (2dd-inner-canvas :parent rect
@@ -253,7 +319,9 @@ Note: a division rect has NO padding and NO interdivision padding"
 When PARENT-CANVAS is supplied the relative coordinate will also
 be set.  If PARENT-CANVAS is not suppled any relative coordinates
 will be cleared."
-  (error "Can't 2dd-set-from for division rects now."))
+  ;; for now this just forwards to 2dd-rect
+  (cl-call-next-method))
+
 (cl-defmethod 2dd-handle-parent-change ((drawing 2dd-division-rect) (new-parent-canvas 2dd-canvas))
   "Update DRAWING from stored relative coordinates to NEW-PARENT-CANVAS.
 

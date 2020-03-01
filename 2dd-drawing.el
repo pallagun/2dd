@@ -92,7 +92,7 @@ ARG can be used to pass in additional info to any rendering function.
 Overridable method for ecah drawing to render itself."
   (error "Unable to render drawing of type %s"
          (eieio-object-class-name drawing)))
-(cl-defgeneric 2dd-serialize-geometry ((drawing 2dd-drawing))
+(cl-defgeneric 2dd-serialize-geometry ((drawing 2dd-drawing) &optional additional-info)
   "Serialize DRAWING's geometry to a string for storage."
   (error "Unable to 2dd-serialize object of type: %s"
          (eieio-object-class-name drawing)))
@@ -198,6 +198,15 @@ TODO - This could be overridden, I'm not sure if I ever want that.  Figure that 
   "Set PADDING-HORIZONTAL and PADDING-VERTICAL on this DRAWING."
   (2dd-set-padding-horizontal drawing (float padding-horizontal))
   (2dd-set-padding-vertical drawing (float padding-vertical)))
+
+(defclass 2dd-with-divided-inner-canvas (2dd-with-inner-canvas)
+  ()
+  :abstract t
+  :documentation "A marker class which indicates that the inner
+  canvas is a divided one.")
+(defsubst 2dd-with-divided-inner-canvas-class-p (any)
+  "Equivalent of (object-of-class-p ANY '2dd-with-divided-inner-canvas)."
+  (object-of-class-p any '2dd-with-divided-inner-canvas))
 
 (defclass 2dd-with-parent-relative-location ()
   ((_relative-geometry :initform nil
