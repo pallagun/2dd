@@ -20,7 +20,13 @@
               :reader 2dd-get-divisions
               :writer 2dd-set-divisions
               :type list
-              :documentation "An ordered list of subdivisons"))
+              :documentation "An ordered list of subdivisons")
+   (_division-constraint :initform 'exclusive+no-diff
+                         :reader 2dd-get-division-constraint
+                         :type symbol
+                         :documentation "The division constraints
+                         for this rectangle.  It may be one of:
+                         'exclusive+no-diff"))
   :documentation "Represents a container rectangle which can be
 drawn on a canvas.  It has an inner-canvas and a label.  The
 container rectangle has a number of inner rectangles which can be
@@ -57,10 +63,6 @@ Returns a stringified list in one of two forms:
   (nconc (cl-call-next-method)
          :divisions 'I-should-put-divisions-here))
 
-
-(defsubst 2dd--outside-unit (number)
-  (or (> number 1.0)
-      (< number 0.0)))
 (defun 2dd--split-on-overlaps (primary other)
   "Separate OTHER (a segment) into pices that do and do not intersect PRIMARY (a segment).
 
@@ -172,31 +174,13 @@ segment-collection as a list."
               non-intersecting-segments
             ;; failure, gap or overlap or insufficient coverage.
             'bad-overlap))))))
+(defun 2dd--validate-exclusive+no-diff (division-rectangles)
+  "Validate that DIVISION-RECTANGLES contains mutually exclusive rectangles which consume an entire unit square.
 
-(cl-defmethod 2dd-set-divisions :before ((this 2dd-division-rect) value)
-  "Ensure that divisions in VALUE do not violate any 2dd-division-rect constraints.
+DIVISION-RECTANGLES should be a list of 2dg-rect objects.
 
-Value must be an ordered list of 2dg-rect objects."
-  ;; I think the algorithm I'm going to use here is to break down all
-  ;; the rectangles into segments.  Then I'll state that for all space
-  ;; to be consumed each line segment must have exactly one other line
-  ;; segment which overlaps it for any length of the segment.
-  ;; Meaning, I should never have a line segment that isn't butted up
-  ;; against some other line segment.  If I *do* have a line segment
-  ;; without something touching it that means there is at least *some*
-  ;; empty space someplace.
-  ;;
-  ;; When I'm done the only line segments I should have remaining
-  ;; should overlay exactly on the rectangles outline.  Since I'm
-  ;; working in relative coordinates this will mean the unit square.
-
-  ;; assert that value must be empty, or a list of 2dg-rect objects
-  (assert (or (null value)
-              (and (mapcar (lambda (x) (object-of-class-p x '2dg-rect)) value)))
-          t
-          "Divisions must be empty or set to a list of 2dg-rect objects.")
-  (when value
-    (let ((all-division-segments (apply #'nconc (mapcar #'2dg-segments value)))
+If DIVISION-RECTANGLES fails validation an error will be thrown."
+  (let ((all-division-segments (apply #'nconc (mapcar #'2dg-segments division-rectangles)))
           (unit-square-segments (2dg-segments (2dg-rect :x-min 0.0 :x-max 1.0
                                                         :y-min 0.0 :y-max 1.0))))
       (let ((all-segments (nconc unit-square-segments all-division-segments))
@@ -211,8 +195,23 @@ Value must be an ordered list of 2dg-rect objects."
         (unless (> iteration-count-down 0)
           (error "Unable to validate divisions with maximum iterations.")
         ;; if you made it here, this is valid.
-        )))))
+        ))))
 
+(cl-defmethod 2dd-set-divisions :before ((this 2dd-division-rect) value)
+  "Ensure that divisions in VALUE do not violate any 2dd-division-rect constraints.
+
+Value must be an ordered list of 2dg-rect objects."
+  ;; assert that value must be empty, or a list of 2dg-rect objects
+  (assert (or (null value)
+              (and (mapcar (lambda (x) (object-of-class-p x '2dg-rect)) value)))
+          t
+          "Divisions must be empty or set to a list of 2dg-rect objects.")
+  (when value
+    (case (2dd-get-division-constraint this)
+      ('exclusive+no-diff (2dd--validate-exclusive+no-diff value))
+      (t (error "Unknown division constraint type: %s"
+                (2dd-get-division-constraint this)))))
+        )
 (cl-defgeneric 2dd-get-num-divisions ((rect 2dd-division-rect))
   "Get the number of divisions in RECT."
   (length (2dd-get-divisions rect)))
@@ -221,18 +220,21 @@ Value must be an ordered list of 2dg-rect objects."
   "How many edit idx points are there for this RECT.
 
 There are always 8."
-  (error "Currently can't tell you how many edit-idxs a division-rect has"))
+  8)
 (cl-defmethod 2dd-edit-idx-points ((rect 2dd-division-rect))
   "Get the locations of the edit idxs for RECT as an ordered list.
 
 Points start at the bottom left and go counter clock wise."
-  (error "Currently can't tell you where edit-idxs are"))
+  (cl-call-next-method))
 (cl-defmethod 2dd-edit-idx-point ((rect 2dd-division-rect) (idx integer))
-  (error "Currently can't tell you where edit-idxs are"))
+  (if (< idx 8)
+      (cl-call-next-method)
+    (error "Currently can't tell you where edit-idxs over 7 are.")))
 
 (cl-defmethod 2dd-build-idx-edited-geometry ((rect 2dd-division-rect) (edit-idx integer) (move-vector 2dg-point))
-  (error "Currently can't build idx-edited geometry"))
-
+  (if (< idx 8)
+      (cl-call-next-method)
+    (error "Currently can't edit a drawing for an index over 7")))
 (cl-defmethod 2dd-has-inner-canvas-p ((rect 2dd-division-rect))
   "Given a rectangle RECT, produce its inner canvas."
   nil)
