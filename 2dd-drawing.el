@@ -101,7 +101,6 @@ Overridable method for ecah drawing to render itself."
 
 When PARENT-CANVAS is suppled and the drawing is capable of holding relative coordinate they will be stored as well.")
 
-
 (cl-defmethod 2dd-num-edit-idxs ((drawing 2dd-drawing))
   "Non-editable drawings always have zero edit indices."
   0)
