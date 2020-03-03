@@ -126,7 +126,7 @@ By default, drawings do not have inner-canvases."
               drawing, if any.  May be nil.  Edit idxs start at
               zero and count up."))
   :abstract t
-  :documentation "A drawing which can have its shape edited.")
+  :documentation "A drawing which could have its shape edited.")
 (defsubst 2dd-editable-drawing-class-p (any)
   "Equivalent of (object-of-class-p ANY '2dd-editable-drawing)."
   (object-of-class-p any '2dd-editable-drawing))
