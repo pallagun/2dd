@@ -122,11 +122,15 @@ When plotting in simple grid mode:
               (let* ((grid-dimensions (2dd---simple-grid-dimensions-by-num-children
                                        (length child-drawings)))
                      (inner-canvas (2dd-get-inner-canvas drawing))
+                     (is-division-rect (2dd-division-rect-class-p drawing))
+                     ;; TODO - I think the above + below lines
+                     ;; indicate 2dd-split-grid should accept the
+                     ;; drawing as an argument to be generalized on.
                      (grid-cells (2dd-split-grid inner-canvas
                                                  (plist-get grid-dimensions :rows)
                                                  (plist-get grid-dimensions :columns)
-                                                 (plist-get settings :sibling-margin-horizontal)
-                                                 (plist-get settings :sibling-margin-vertical))))
+                                                 (if is-division-rect nil (plist-get settings :sibling-margin-horizontal))
+                                                 (if is-division-rect nil (plist-get settings :sibling-margin-vertical)))))
                 ;; for each child, replot it in the grid-cell with the same idx
                 (cl-loop for child-drawing in child-drawings
                          for grid-cell in grid-cells

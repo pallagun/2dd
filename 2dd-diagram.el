@@ -28,7 +28,10 @@
 
 CHILD-FN should return all children of a given drawing.")
 (cl-defmethod 2dd-find-drawing-selection ((diagram 2dd-diagram) (selection-rect 2dg-rect) child-fn)
-  "Find the element in DIAGRAM inside the SELECTION-RECT.
+  "Find the elements in DIAGRAM inside the SELECTION-RECT.
+
+This function will return a list of elements from most specific
+to least specific.
 
 CHILD-FN should return all children of a given drawing.
 
@@ -39,27 +42,42 @@ Selection preference order:
 - link drawings
 - Rectange drawings
 - The root element"
+  ;; TODO - this function does not current take containment constraints into account, it should.
+  ;; it only assumes that all drawings are fully contained.
   (let ((start-drawing (oref diagram _root)))
-    (or ;; (2dd---find-point selection-rect start-drawing)
-        ;; (2dd---find-link selection-rect start-drawing)
-     (2dd---find-other selection-rect start-drawing child-fn))))
+    (nconc
+     ;; (2dd---find-point selection-rect start-drawing)
+     ;; (2dd---find-link selection-rect start-drawing)
+     (nreverse (2dd---find-other selection-rect start-drawing child-fn)))))
 
+(cl-defgeneric 2dd-is-drawing-in-selection ((drawing 2dd-drawing) (selection-rect 2dg-rect))
+  "This function returns non-nil if SELECTION-RECT would select DRAWING.")
+(cl-defmethod 2dd-is-drawing-in-selection ((drawing 2dd-drawing) (selection-rect 2dg-rect))
+  "This function returns non-nil if SELECTION-RECT would select DRAWING."
+  (2dd---other-touches-selection selection-rect drawing))
 (defsubst 2dd---other-touches-selection (selection-rect drawing)
   "Return non-nil if DRAWING touches or is inside of SELECTION-RECT."
+  ;; TODO - it might be good if this function returned a list from
+  ;; most specific to least specific selection.
   (let ((geom (2dd-geometry drawing)))
     (and geom
          (2dg-has-intersection selection-rect geom 'stacked))))
 (defun 2dd---find-other (selection-rect start-drawing child-fn)
-  "Get first non-link/non-point element in the SELECTION-RECT.
-Start searching at SEARCH-PARENT.  When nothing is found return
-search-parent."
+  "Get a list of all non-link/non-point element in the SELECTION-RECT.
+
+Elements in selection-rect are returned in order of least
+specific to most specific (parents at start, children at the
+end).
+
+Start searching at START-DRAWING.  When nothing is found return nil"
   (if (2dd---other-touches-selection selection-rect start-drawing)
-    ;; inside this drawing, see if any children are inside.
-    (cl-loop for child in (funcall child-fn start-drawing)
-             for child-result = (2dd---find-other selection-rect child child-fn)
-             when child-result
-              return child-result
-             finally return start-drawing)
+      ;; inside this drawing, see if any children are inside.
+      (cons start-drawing
+            (cl-loop for child in (funcall child-fn start-drawing)
+                     for child-result = (2dd---find-other selection-rect child child-fn)
+                     when child-result
+                       return child-result
+                     finally return nil))
     nil))
 
  ;;   (cl-find-if (lambda

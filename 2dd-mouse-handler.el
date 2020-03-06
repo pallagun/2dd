@@ -105,7 +105,10 @@ Mouse button 2 and 3 have the same 3 valid actions with the expected names.
 Any errors from the hook/override will be caught and returned as
 a string.  If there is any error detected, all mouse overrides
 will be cleared."
-  ;; (message "mouse hook: %s, %s" type args)
+  ;; (message "mouse hook: %s, %s" type args) TODO - this condition
+  ;; case hides a good deal of information about the error, address
+  ;; that or make a toggle to capture or not capture errors.
+  ;; TODO - possibly I should be catching signals and not errors.
   (let ((error-message))
     (condition-case caught-error
         (let ((override-hook (assq type 2dd-mouse-overrides)))
@@ -118,23 +121,10 @@ will be cleared."
             (let ((hook (assq type 2dd-mouse-hooks)))
               (when hook
                 (apply (cdr hook) args)))))
-      (error (progn
+        (error (progn
                (2dd-mouse-clear-all-overrides)
                (setq error-message (second caught-error)))))
     error-message))
-;; (defsubst 2dd--mouse-run-hook (type &rest args)
-;;   "This function will run mouse hook of TYPE with ARGS.
-
-;; If the hook exists this function will return t.  If the hook does
-;; not exist and therefore nothing was run this function will return
-;; nil."
-;;   (error "But do you have an override though?")
-;;   (let ((hook (assq type 2dd-mouse-hooks)))
-;;     (if hook
-;;         (progn
-;;           (apply (cdr hook) args)
-;;           t)
-;;       nil)))
 (defsubst 2dd--mouse-handle-error (error-string)
   "Handle this mouse error"
   (let ((err-handler (assq 'error 2dd-mouse-hooks)))
