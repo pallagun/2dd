@@ -6,6 +6,7 @@
 ;;; Code:
 (require '2dg)
 (require '2dd-rect)
+(require '2dd-division-rect)
 (require '2dd-point)
 (require '2dd-util)
 
@@ -132,6 +133,8 @@ When plotting in simple grid mode:
                                                  (if is-division-rect nil (plist-get settings :sibling-margin-horizontal))
                                                  (if is-division-rect nil (plist-get settings :sibling-margin-vertical)))))
                 ;; for each child, replot it in the grid-cell with the same idx
+                (when is-division-rect
+                  (2dd-set-divisions-absolute drawing grid-cells))
                 (cl-loop for child-drawing in child-drawings
                          for grid-cell in grid-cells
                          do (progn
@@ -302,19 +305,37 @@ to maintain relative positions and enforce desired constraints."
         (2dd-set-from drawing new-geometry parent-canvas)))
 
     (if child-drawings
-        (let ((new-inner-canvas (2dd-get-inner-canvas drawing)))
-          ;; report success as the (and of all your child successes).
-          (and (mapcar (lambda (child)
-                         (let* ((relative-coord (or (2dd-get-relative-geometry child)
-                                                    (2dg-relative-coordinates prev-inner-canvas
-                                                                              (2dd-geometry child))))
-                                (new-absolute-coord (2dg-absolute-coordinates new-inner-canvas
-                                                                              relative-coord)))
-                           (2dd--update-plot-worker child
-                                                    new-absolute-coord
-                                                    child-fn
-                                                    new-inner-canvas)))
-                       child-drawings)))
+        (let ((all-ok (lambda (update-success-list)
+                        ;; TODO - find out why I can't (apply 'and (list-of-t-or-nil))
+                        (eval (cons 'and update-success-list))))
+              (new-inner-canvas (2dd-get-inner-canvas drawing)))
+          (if (2dd-division-rect-class-p drawing)
+              ;; division rect - all child drawings are controlled by the division rect
+              (let ((divisions (2dd-get-divisions-absolute drawing)))
+                (cl-loop with results = nil
+                         for child in child-drawings
+                         for division in divisions
+                         do (push (2dd--update-plot-worker child
+                                                           division
+                                                           child-fn
+                                                           new-inner-canvas
+                                                           t)
+                                results)
+                       finally return (funcall all-ok results)))
+            ;; normal rectangle child, use relative positions
+            ;; report success as the (and of all your child successes).
+            (funcall all-ok
+                     (mapcar (lambda (child)
+                               (let* ((relative-coord (or (2dd-get-relative-geometry child)
+                                                          (2dg-relative-coordinates prev-inner-canvas
+                                                                                    (2dd-geometry child))))
+                                      (new-absolute-coord (2dg-absolute-coordinates new-inner-canvas
+                                                                                    relative-coord)))
+                                 (2dd--update-plot-worker child
+                                                          new-absolute-coord
+                                                          child-fn
+                                                          new-inner-canvas)))
+                             child-drawings))))
       ;; When there are no children, report success.
       t)))
 
@@ -352,9 +373,18 @@ PARENT-DRAWING may be nil, sibling-drawings may be nil."
   "Return non-nil if CHILD-GEOMETRY is contained within PARENT-DRAWING, nil otherwise."
   (if parent-drawing
       ;; You have a parent drawing, check for containment
-      (let ((parent-inner-canvas (2dd-get-inner-canvas parent-drawing)))
+      (let ((parent-inner-canvas (2dd-get-inner-canvas parent-drawing))
+            ;; child geometry may come as a normal rectangle or (in
+            ;; the case of a division-rect as the first element of a
+            ;; list.
+            (child-outer-shell (cond ((and (recordp child-geometry)
+                                           (2dg-rect-class-p child-geometry))
+                                      child-geometry)
+                                     ((2dg-rect-class-p (first child-geometry))
+                                      (first child-geometry))
+                                     (t (error "Unable to determine outer shell from geometry")))))
         (if (and parent-inner-canvas
-                 (2dg-contains parent-inner-canvas child-geometry))
+                 (2dg-contains parent-inner-canvas child-outer-shell))
             t
           nil))
     ;; No parent drawing provided, unable to validate constraint, assume failure
