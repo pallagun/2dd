@@ -84,10 +84,10 @@ VIEWPORT is used to establish how agressive the simplification can be.")
 
 Having an inner-canvas indicates that a drawing has space within
 it to hold other drawings.")
-(cl-defgeneric 2dd-render ((drawing 2dd-drawing) scratch x-transformer y-transformer &rest arg)
+(cl-defgeneric 2dd-render ((drawing 2dd-drawing) scratch x-transformer y-transformer &rest args)
   "Render DRAWING to SCRATCH buffer using X-TRANSFORMER and Y-TRANSFORMER.
 
-ARG can be used to pass in additional info to any rendering function.
+ARGS can be used to pass in additional info to any rendering function.
 
 Overridable method for ecah drawing to render itself."
   (error "Unable to render drawing of type %s"

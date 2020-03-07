@@ -34,47 +34,62 @@ canvas.  It has an inner-canvas and a label")
             (2dd-get-label rect)
             (if geo (2dg-pprint geo) nil)
             (if relative-geo (2dg-pprint relative-geo) nil))))
-(cl-defmethod 2dd-render ((rect 2dd-rect) scratch x-transformer y-transformer &rest style-plist)
+
+(defmacro 2dd--rect-coord-repair (min max)
+  "A macro to ensure min is below max, I should not need this.
+
+TODO - fix this so I don't need this, it's a clear hack."
+  `(when (> ,min ,max)
+    (let ((mid (round (/ (+ ,min ,max) 2.0))))
+      (setq ,min mid)
+      (setq ,max mid))))
+
+(defconst 2dd---rect-edit-points (list 2dd---arrow-any
+                                       2dd---arrow-down
+                                       2dd---arrow-any
+                                       2dd---arrow-right
+                                       2dd---arrow-any
+                                       2dd---arrow-up
+                                       2dd---arrow-any
+                                       2dd---arrow-left
+                                       2dd---arrow-any)
+  "Edit idx characters, in order.")
+
+(cl-defmethod 2dd-render ((rect 2dd-rect) scratch x-transformer y-transformer &rest args)
   "Render RECT to SCRATCH buffer using X-TRANSFORMER and Y-TRANSFORMER.
+
+If ARGS is used the first argument must be a plist containing
+style information for the drawing.  Accepted plist keys are:
+
+:outline-style (defaults to no style)
+:label-style (defaults to no style)
+:edit-idx-style (defaults to no style)
+:no-outline (defaults to nil/false)
+:label-y-offset (defaults to -1)
 
 Overridable method for ecah drawing to render itself."
   (let ((rectg (2dd-geometry rect))
         (label (2dd-get-label rect))
-        (outline-style (plist-get style-plist :outline-style))
-        (label-style (plist-get style-plist :label-style))
-        (edit-idx-style (plist-get style-plist :edit-idx-style))
-        (no-outline (plist-get style-plist :no-outline)))
+        (style-plist (first args)))
     (let ((x-min (funcall x-transformer (2dg-x-min rectg)))
           (x-max (funcall x-transformer (2dg-x-max rectg)))
           (y-min (funcall y-transformer (2dg-y-min rectg)))
           (y-max (funcall y-transformer (2dg-y-max rectg))))
       ;; coordinate inversion - when it occurs just draw something tiny for now.
       ;; todo: handle this better?
-      (when (> x-min x-max)
-        (let ((mid (round (/ (+ x-min x-max) 2.0))))
-          (setq x-min mid)
-          (setq x-max mid)))
-      (when (> y-min y-max)
-        (let ((mid (round (/ (+ y-min y-max) 2.0))))
-          (setq y-min mid)
-          (setq y-max mid)))
-      (unless no-outline
-        (2dd---scratch-line-vert scratch x-min y-min y-max 2dd---vertical outline-style)
-        (2dd---scratch-line-vert scratch x-max y-min y-max 2dd---vertical outline-style)
-        (2dd---scratch-line-hori scratch x-min x-max y-min 2dd---horizontal outline-style)
-        (2dd---scratch-line-hori scratch x-min x-max y-max 2dd---horizontal outline-style))
+      (2dd--rect-coord-repair x-min x-max)
+      (2dd--rect-coord-repair y-min y-max)
+      (unless (plist-get style-plist :no-outline)
+        (let ((outline-style (plist-get style-plist :outline-style)))
+          (2dd---scratch-line-vert scratch x-min y-min y-max 2dd---vertical outline-style)
+          (2dd---scratch-line-vert scratch x-max y-min y-max 2dd---vertical outline-style)
+          (2dd---scratch-line-hori scratch x-min x-max y-min 2dd---horizontal outline-style)
+          (2dd---scratch-line-hori scratch x-min x-max y-max 2dd---horizontal outline-style)))
       ;; if there is an edit idx set, draw the edit idx points
       (when (2dd-get-edit-idx rect)
-        (cl-loop for point in (2dd-edit-idx-points rect)
-                 for marker-char in (list 2dd---arrow-any
-                                          2dd---arrow-down
-                                          2dd---arrow-any
-                                          2dd---arrow-right
-                                          2dd---arrow-any
-                                          2dd---arrow-up
-                                          2dd---arrow-any
-                                          2dd---arrow-left
-                                          2dd---arrow-any)
+        (cl-loop with edit-idx-style = (plist-get style-plist :edit-idx-style)
+                 for point in (2dd-edit-idx-points rect)
+                 for marker-char in 2dd---rect-edit-points
                  for x-scratch = (funcall x-transformer (2dg-x point))
                  for y-scratch = (funcall y-transformer (2dg-y point))
                  do (2dd---scratch-set scratch
@@ -86,16 +101,18 @@ Overridable method for ecah drawing to render itself."
       ;; if there is a label, place it in the top left *pixel*
       ;; Don't draw the label if there is no space (y-max == y-min => no space for label)
       (when (and label (> y-max y-min))
-        (let ((label-length (length label)))
+        (let ((label-length (length label))
+              (label-y-displacement (or (plist-get style-plist :label-y-offset)
+                                        -1)))
           (when (> label-length 0)
             (let ((max-display-length (max 0 (- (- x-max x-min) 1))))
               (2dd---scratch-label scratch
                                    (1+ x-min)
-                                   (1- y-max)
+                                   (+ y-max label-y-displacement)
                                    (if (> label-length max-display-length)
                                        (substring label 0 max-display-length)
                                      label)
-                                   label-style))))))))
+                                   (plist-get style-plist :label-style)))))))))
 (cl-defmethod 2dd-serialize-geometry ((rect 2dd-rect) &optional additional-info)
   "Serialize RECT to a string.
 

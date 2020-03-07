@@ -50,68 +50,17 @@ divisions inside the main rectangle.")
             (if geo (2dg-pprint geo) 'nil)
             (if relative-geo (2dg-pprint relative-geo) nil)
             "??Divisions??")))
-(cl-defmethod 2dd-render ((rect 2dd-division-rect) scratch x-transformer y-transformer &rest style-plist)
+
+(cl-defmethod 2dd-render ((rect 2dd-division-rect) scratch x-transformer y-transformer &rest args)
   "Render RECT to SCRATCH buffer using X-TRANSFORMER and Y-TRANSFORMER.
 
-Overridable method for ecah drawing to render itself."
-  (let ((rectg (2dd-geometry rect))
-        (divisiong (2dd-get-divisions rect))
-        (label (2dd-get-label rect))
-        (outline-style (plist-get style-plist :outline-style))
-        (label-style (plist-get style-plist :label-style))
-        (edit-idx-style (plist-get style-plist :edit-idx-style)))
-    (let ((x-min (funcall x-transformer (2dg-x-min rectg)))
-          (x-max (funcall x-transformer (2dg-x-max rectg)))
-          (y-min (funcall y-transformer (2dg-y-min rectg)))
-          (y-max (funcall y-transformer (2dg-y-max rectg))))
-      ;; coordinate inversion - when it occurs just draw something tiny for now.
-      ;; todo: handle this better?
-      ;; TODO - this shares a lot with the rect code - I should subfunction that out at some point.
-      (when (> x-min x-max)
-        (let ((mid (round (/ (+ x-min x-max) 2.0))))
-          (setq x-min mid)
-          (setq x-max mid)))
-      (when (> y-min y-max)
-        (let ((mid (round (/ (+ y-min y-max) 2.0))))
-          (setq y-min mid)
-          (setq y-max mid)))
-      (2dd---scratch-line-vert scratch x-min y-min y-max 2dd---vertical outline-style)
-      (2dd---scratch-line-vert scratch x-max y-min y-max 2dd---vertical outline-style)
-      (2dd---scratch-line-hori scratch x-min x-max y-min 2dd---horizontal outline-style)
-      (2dd---scratch-line-hori scratch x-min x-max y-max 2dd---horizontal outline-style)
-      ;; if there is an edit idx set, draw the edit idx points
-      (when (2dd-get-edit-idx rect)
-        (cl-loop for point in (2dd-edit-idx-points rect)
-                 for marker-char in (list 2dd---arrow-any
-                                          2dd---arrow-down
-                                          2dd---arrow-any
-                                          2dd---arrow-right
-                                          2dd---arrow-any
-                                          2dd---arrow-up
-                                          2dd---arrow-any
-                                          2dd---arrow-left
-                                          2dd---arrow-any)
-                 for x-scratch = (funcall x-transformer (2dg-x point))
-                 for y-scratch = (funcall y-transformer (2dg-y point))
-                 do (2dd---scratch-set scratch
-                                       x-scratch
-                                       y-scratch
-                                       marker-char
-                                       edit-idx-style)))
+If ARGS is used the first argument must be a plist containing
+style information for the drawing.  For acceptable style keys
+please see 2dd-render for 2dd-rect.
 
-      ;; if there is a label, place it above the top top left *pixel*
-      ;; Don't draw the label if there is no space (y-max == y-min => no space for label)
-      (when (and label (> y-max y-min))
-        (let ((label-length (length label)))
-          (when (> label-length 0)
-            (let ((max-display-length (max 0 (- (- x-max x-min) 1))))
-              (2dd---scratch-label scratch
-                                   (1+ x-min)
-                                   (1+ y-max)
-                                   (if (> label-length max-display-length)
-                                       (substring label 0 max-display-length)
-                                     label)
-                                   label-style))))))))
+Overridable method for ecah drawing to render itself."
+  (let ((style-plist (first args)))
+    (cl-call-next-method rect scratch x-transformer y-transformer (cons :label-y-offset (cons 1 style-plist)))))
 
 (cl-defmethod 2dd-serialize-geometry ((rect 2dd-division-rect) &optional additional-info)
   "Serialize RECT to a string.
