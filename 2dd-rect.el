@@ -126,7 +126,7 @@ Returns a stringified list in one of two forms:
                          (nconc output-list additional-info)
                        output-list))))
 (defsubst 2dd--clone-2dg-rect (any-rect)
-  "Create a clone of ANY-RECT returning a 2dg-rect."
+  "Create a clone of ANY-RECT returning only a raw 2dg-rect."
   (2dg-rect :x-min (2dg-x-min any-rect)
             :x-max (2dg-x-max any-rect)
             :y-min (2dg-y-min any-rect)
