@@ -80,42 +80,34 @@ Start searching at START-DRAWING.  When nothing is found return nil"
                      finally return nil))
     nil))
 
- ;;   (cl-find-if (lambda
-  ;;               (return-from 2dd---find-selection
-  ;;                 (2dd---find-other selection-rect child-drawing child-fn carry)))))
-  ;; (block 2dd---find-selection
-  ;;   (mapc (lambda (child-drawing)
-  ;;           (let ((childg (2dd-geometry child-drawing)))
-  ;;             (when (and childg
-  ;;                        (2dg-has-intersection selection-rect childg 'stacked))
-  ;;               (return-from 2dd---find-selection
-  ;;                 (2dd---find-other selection-rect child-drawing child-fn carry)))))
-  ;;         (funcall child-fn search-drawing))
-  ;;   carry))
-
 (cl-defgeneric 2dd-render-all ((diagram 2dd-diagram) child-fn)
-  "Render diagram to a string.")
+  "Render DIAGRAM to a string.
+
+CHILD-FN should provide child drawings when called with a parent
+drawing.")
 (cl-defmethod 2dd-render-all ((diagram 2dd-diagram) child-fn)
-  "Render this diagram to a string."
+  "Render this DIAGRAM to a string."
   (with-slots (_root _viewport _canvas) diagram
     (let ((scratch (2dd--get-scratch _viewport))
           (transformers (2dd-get-scratch-int-transformers _viewport)))
       (2dd---render-worker scratch
                            _root
                            _canvas
+                           _viewport
                            child-fn
                            (car transformers)
                            (cdr transformers))
       (2dd--scratch-write scratch))))
 
-(defun 2dd---render-worker (scratch drawing canvas child-fn x-transformer y-transformer)
+(defun 2dd---render-worker (scratch drawing canvas viewport child-fn x-transformer y-transformer)
   "Draw everything recursively."
-  (2dd-render drawing scratch x-transformer y-transformer)
+  (2dd-render drawing scratch x-transformer y-transformer viewport)
   ;; now draw children.
   (mapc (lambda (child)
           (2dd---render-worker scratch
                                child
                                canvas
+                               viewport
                                child-fn
                                x-transformer
                                y-transformer))

@@ -42,6 +42,9 @@ constraints at the same time.")
               :documentation "The 2dg object backing this drawing"))
   :abstract t
   :documentation "This is a thing which can be drawn.  A rectangle, an arrow, a label, etc.")
+(defsubst 2dd-drawing-class-p (any)
+  "Same as (object-of-class-p ANY '2dd-drawing)."
+  (object-of-class-p any '2dd-drawing))
 (cl-defmethod 2dd-set-constraint :before ((this 2dd-drawing) value)
   "Set the constraint flag for THIS to VALUE after validation."
   (unless (memq value 2dd-valid-constraints)
@@ -84,7 +87,7 @@ VIEWPORT is used to establish how agressive the simplification can be.")
 
 Having an inner-canvas indicates that a drawing has space within
 it to hold other drawings.")
-(cl-defgeneric 2dd-render ((drawing 2dd-drawing) scratch x-transformer y-transformer &rest args)
+(cl-defgeneric 2dd-render ((drawing 2dd-drawing) scratch x-transformer y-transformer viewport &rest args)
   "Render DRAWING to SCRATCH buffer using X-TRANSFORMER and Y-TRANSFORMER.
 
 ARGS can be used to pass in additional info to any rendering function.
@@ -100,6 +103,40 @@ Overridable method for ecah drawing to render itself."
   "Set DRAWING's geometry from SOURCE-GEOMETETRY.
 
 When PARENT-CANVAS is suppled and the drawing is capable of holding relative coordinate they will be stored as well.")
+(cl-defgeneric 2dd--plot-update ((drawing 2dd-drawing) (old-parent-canvas 2dd-canvas) (new-parent-canvas 2dd-canvas) child-fn)
+  "Update DRAWING based on a parent drawing changing.
+
+Function will return non-nil when changes are applied and nil
+otherwise.
+
+This function should be used when the parent of DRAWING has been
+changed and DRAWING must be updated to accomodate this.
+
+OLD-PARENT-CANVAS should contain the previous parent inner-canvas
+before any changes were applied,
+
+NEW-PARENT-CANVAS should contain the parent inner-canvas after
+the parent drawing was edited.
+
+CHILD-FN should produce a list of all child drawings of a given
+ drawing.  It will be called as: (funcall CHILD-FN ROOT-DRAWING)."
+  (error "Unable to 2dd--plot-update for drawing of type: %s"
+         (eieio-object-class-name drawing)))
+(cl-defgeneric 2dd--set-geometry-and-plot-update ((drawing 2dd-drawing) new-geometry child-fn &optional parent-canvas)
+  "Update DRAWING to have NEW-GEOMETRY and cascade any needed updates to child drawings.
+
+NEW-GEOMETRY should be specified in absolute coordinates.
+
+CHILD-FN should produce a list of all child drawings of a given
+ drawing.  It will be called as: (funcall CHILD-FN ROOT-DRAWING).
+
+When PARENT-CANVAS is supplied it will be used to set relative
+coordinates.
+
+Note: this function assumes that constraints are already
+validated."
+  (error "Unable to 2dd--set-geometry-and-plot-update for drawing of type: %s"
+         (eieio-object-class-name drawing)))
 
 (cl-defmethod 2dd-num-edit-idxs ((drawing 2dd-drawing))
   "Non-editable drawings always have zero edit indices."
@@ -217,6 +254,8 @@ TODO - This could be overridden, I'm not sure if I ever want that.  Figure that 
 (defsubst 2dd-with-parent-relative-location-class-p (any)
   "Equivalent of (object-of-class-p ANY '2dd-with-parent-relative-location)"
   (object-of-class-p any '2dd-with-parent-relative-location))
+
+
 
 (provide '2dd-drawing)
 ;;; 2dd-drawing.el ends here

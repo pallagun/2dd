@@ -68,7 +68,7 @@ divisions inside the main rectangle.")
       (unless (> iteration-count-down 0)
         (error "Unable to determine what separators to render."))
       drawable-segments))
-(cl-defmethod 2dd-render ((rect 2dd-division-rect) scratch x-transformer y-transformer &rest args)
+(cl-defmethod 2dd-render ((rect 2dd-division-rect) scratch x-transformer y-transformer viewport &rest args)
   "Render RECT to SCRATCH buffer using X-TRANSFORMER and Y-TRANSFORMER.
 
 If ARGS is used the first argument must be a plist containing
@@ -102,7 +102,12 @@ Overridable method for ecah drawing to render itself."
     ;; Update label offset style to go up as is needed for parallel
     ;; elements then render the outer rectangle normally.
     (let ((style-plist (first args)))
-      (cl-call-next-method rect scratch x-transformer y-transformer (cons :label-y-offset (cons 1 style-plist))))
+      (cl-call-next-method rect
+                           scratch
+                           x-transformer
+                           y-transformer
+                           viewport
+                           (cons :label-y-offset (cons 1 style-plist))))
     ;; now, if this drawing is in edit-idx mode, render any edit-idx
     ;; points over idx 7
     (when (2dd-get-edit-idx rect)
@@ -483,6 +488,35 @@ will be cleared."
     (2dd-set-divisions drawing-rect divisions)
 
     (2dd-set-from drawing-rect outer-shell parent-canvas)))
+
+(cl-defmethod 2dd--set-geometry-and-plot-update ((rect 2dd-division-rect) (geometry list) child-fn &optional parent-canvas)
+  "Update RECT to have GEOMETRY.
+
+GEOMETRY will be in the form of a list where the first element is
+a 2dg-rect describing the outer shell.  The second element of
+GEOMETRY is a list containing ordered divisions."
+  ;; first, set divisions, then set outershell to get cascading
+  (let ((outer-shell (first geometry))
+        (divisions (second geometry)))
+    (2dd-set-divisions rect divisions)
+    (2dd--set-geometry-and-plot-update rect outer-shell child-fn parent-canvas)))
+
+(cl-defmethod 2dd--set-geometry-and-plot-update ((rect 2dd-division-rect) (rectg 2dg-rect) child-fn &optional parent-canvas)
+  "Update RECT to have RECTG outer-shell geometry, cascade child drawings as needed."
+  (let ((old-inner-canvas (2dd-get-inner-canvas rect)))
+    (2dd-set-from rect rectg parent-canvas)
+    (let ((children (funcall child-fn rect))
+          (divisions (2dd-get-divisions-absolute rect))
+          (new-inner-canvas (2dd-get-inner-canvas rect))
+          (success t))
+      (cl-loop for child in children
+               for division in divisions
+               do (setq success
+                        (and success
+                             (2dd--set-geometry-and-plot-update child
+                                                                division
+                                                                child-fn)))
+               finally return success))))
 
 
 (cl-defmethod 2dd-handle-parent-change ((drawing 2dd-division-rect) (new-parent-canvas 2dd-canvas))

@@ -55,7 +55,7 @@ TODO - fix this so I don't need this, it's a clear hack."
                                        2dd---arrow-any)
   "Edit idx characters, in order.")
 
-(cl-defmethod 2dd-render ((rect 2dd-rect) scratch x-transformer y-transformer &rest args)
+(cl-defmethod 2dd-render ((rect 2dd-rect) scratch x-transformer y-transformer viewport &rest args)
   "Render RECT to SCRATCH buffer using X-TRANSFORMER and Y-TRANSFORMER.
 
 If ARGS is used the first argument must be a plist containing
@@ -280,26 +280,85 @@ will be cleared."
       ;; Best to clear them and not be wrong than leave them and be
       ;; incorrect.
       (setf relative-rect nil))))
-;; TODO - make a defgeneric for this.
-(cl-defmethod 2dd-handle-parent-change ((drawing 2dd-rect) (new-parent-canvas 2dd-canvas))
-  "Update DRAWING from stored relative coordinates to NEW-PARENT-CANVAS.
 
-Returns non-nil if the drawing was updated, nil if it was not
-able to be updated."
-  (with-slots ((drawing-rect _geometry) (drawing-relative _relative-geometry)) drawing
-    (if drawing-relative
-        ;; this drawing has a relative rect and can be updated relative to a parent.
-        (let ((absolute-rect (2dg-absolute-coordinates new-parent-canvas drawing-relative)))
-          (if (null drawing-rect)
-              ;; missing a rect entirely, create one.
-              (setf rect absolute-rect)
-            ;; rect exists, just set it.
-            (oset drawing-rect x-min (oref absolute-rect x-min))
-            (oset drawing-rect x-max (oref absolute-rect x-max))
-            (oset drawing-rect y-min (oref absolute-rect y-min))
-            (oset drawing-rect y-max (oref absolute-rect y-max)))
-          t)
-      nil)))
+(cl-defmethod 2dd--plot-update ((rect 2dd-rect) (old-parent-canvas 2dd-canvas) (new-parent-canvas 2dd-canvas) child-fn)
+  "Update RECT based on a parent drawing changing.
+
+Function will return non-nil when changes are applied and nil
+otherwise.
+
+This function should be used when the parent of DRAWING has been
+changed and DRAWING must be updated to accomodate this.
+
+OLD-PARENT-CANVAS should contain the previous parent inner-canvas
+before any changes were applied.
+
+NEW-PARENT-CANVAS should contain the parent inner-canvas after
+the parent drawing was edited.
+
+CHILD-FN should produce a list of all child drawings of a given
+ drawing.  It will be called as: (funcall CHILD-FN ROOT-DRAWING)."
+
+  (let* ((relative-coord (or (2dd-get-relative-geometry rect)
+                             (2dg-relative-coordinates old-parent-canvas
+                                                       (2dd-geometry child))))
+         (new-absolute-coords (2dg-absolute-coordinates new-parent-canvas
+                                                        relative-coord)))
+    (2dd--set-geometry-and-plot-update rect
+                                       new-absolute-coords
+                                       child-fn
+                                       new-parent-canvas)
+    ;; (let ((old-inner-canvas (2dd-get-inner-canvas rect)))
+    ;;   (2dd-set-from rect new-absolute-coords new-parent-canvas)
+    ;;   (let ((children (funcall child-fn rect))
+    ;;         (new-inner-canvas (2dd-get-inner-canvas rect))
+    ;;         (success t))
+    ;;     (cl-loop for child in children
+    ;;              do (setq success
+    ;;                       (and success
+    ;;                            (2dd--plot-update child
+    ;;                                              old-inner-canas
+    ;;                                              new-inner-canvas
+    ;;                                              child-fn)))
+    ;;              finally return success)))
+    ))
+
+(cl-defmethod 2dd--set-geometry-and-plot-update ((rect 2dd-rect) (rectg 2dg-rect) child-fn &optional parent-canvas)
+  "Update RECT to have RECTG geometry, cascade child drawings as needed."
+  (let ((old-inner-canvas (2dd-get-inner-canvas rect)))
+    (2dd-set-from rect rectg parent-canvas)
+    (let ((children (funcall child-fn rect))
+          (new-inner-canvas (2dd-get-inner-canvas rect))
+          (success t))
+      (cl-loop for child in children
+               do (setq success
+                        (and success
+                             (2dd--plot-update child
+                                               old-inner-canvas
+                                               new-inner-canvas
+                                               child-fn)))
+               finally return success))))
+
+;; TODO - make a defgeneric for this.
+;; (cl-defmethod 2dd-handle-parent-change ((drawing 2dd-rect) (new-parent-canvas 2dd-canvas))
+;;   "Update DRAWING from stored relative coordinates to NEW-PARENT-CANVAS.
+
+;; Returns non-nil if the drawing was updated, nil if it was not
+;; able to be updated."
+;;   (with-slots ((drawing-rect _geometry) (drawing-relative _relative-geometry)) drawing
+;;     (if drawing-relative
+;;         ;; this drawing has a relative rect and can be updated relative to a parent.
+;;         (let ((absolute-rect (2dg-absolute-coordinates new-parent-canvas drawing-relative)))
+;;           (if (null drawing-rect)
+;;               ;; missing a rect entirely, create one.
+;;               (setf rect absolute-rect)
+;;             ;; rect exists, just set it.
+;;             (oset drawing-rect x-min (oref absolute-rect x-min))
+;;             (oset drawing-rect x-max (oref absolute-rect x-max))
+;;             (oset drawing-rect y-min (oref absolute-rect y-min))
+;;             (oset drawing-rect y-max (oref absolute-rect y-max)))
+;;           t)
+;;       nil)))
 
 (cl-defmethod 2dd-leaving-segment-collision-edge ((drawing-rect 2dd-rect) (pt 2dg-point))
   "If you leave centroid of RECT headed towards PT, which edge do you hit?

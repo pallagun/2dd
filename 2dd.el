@@ -8,6 +8,8 @@
 (require '2dd-rect)
 (require '2dd-rect-container)
 (require '2dd-division-rect)
+(require '2dd-link-connector)
+(require '2dd-link)
 (require '2dd-plotter)
 (require '2dd-diagram)
 (require '2dd-scratch-render)
