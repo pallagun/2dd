@@ -79,7 +79,7 @@ It will be able to hold at least that many children, possibly more."
   (let ((num-columns (ceiling (sqrt num-children))))
     (list :columns num-columns
           :rows (ceiling (/ (float num-children) (float num-columns))))))
-(defun 2dd--plot-simple-grid (drawing canvas child-fn preserve-drawing-p-fn settings &optional force-replot)
+(defun 2dd--plot-simple-grid (drawing canvas child-fn preserve-drawing-p-fn settings &optional force-replot parent-inner-canvas)
   "When force-replot is true it's because some parent drawing got replotted.
 
 When plotting in simple grid mode:
@@ -113,7 +113,7 @@ encounters a 2dd-link type drawing."
                (prev-inner-canvas (and has-geometry (2dd-get-inner-canvas drawing))))
 
           (when must-replot
-            (2dd-set-from drawing canvas nil)
+            (2dd-set-from drawing canvas parent-inner-canvas)
             (2dd-set-padding drawing horizontal-pad vertical-pad))
 
           (when child-drawings
@@ -141,18 +141,23 @@ encounters a 2dd-link type drawing."
                   (when is-division-rect
                     (2dd-set-divisions-absolute drawing grid-cells))
                   (cl-loop for child-drawing in child-drawings
+                           for division-idx from 0 to (1- (length child-drawings))
                            for grid-cell in grid-cells
                            do (progn
                                 (2dd--plot-simple-grid child-drawing
-                                                       grid-cell
+                                                       (if is-division-rect
+                                                           (2dd--build-relative-division-rect-reference drawing division-idx)
+                                                         grid-cell)
                                                        child-fn
                                                        preserve-drawing-p-fn
                                                        settings
-                                                       t)
-                                (when (2dd-with-parent-relative-location-class-p child-drawing)
-                                  (2dd-set-relative-geometry child-drawing
-                                                             (2dg-relative-coordinates inner-canvas
-                                                                                       (2dd-geometry child-drawing)))))))
+                                                       t
+                                                       inner-canvas)
+                                ;; (when (2dd-with-parent-relative-location-class-p child-drawing)
+                                ;;   (2dd-set-relative-geometry child-drawing
+                                ;;                              (2dg-relative-coordinates inner-canvas
+                                ;;                                                        (2dd-geometry child-drawing))))
+                                )))
               ;; every child drawing exists and all of them should be
               ;; preserved.  The parent has a previous inner canvas, use
               ;; that to carry over relative layout
@@ -167,7 +172,8 @@ encounters a 2dd-link type drawing."
                                                  child-fn
                                                  preserve-drawing-p-fn
                                                  settings
-                                                 t)))
+                                                 t
+                                                 new-inner-canvas)))
                       child-drawings)))))))))
 
 (cl-defgeneric 2dd-update-plot ((drawing 2dd-drawing) new-geometry child-fn &optional parent-drawing sibling-drawings)

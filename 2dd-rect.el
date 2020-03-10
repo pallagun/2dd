@@ -118,13 +118,21 @@ Overridable method for ecah drawing to render itself."
 
 Returns a stringified list in one of two forms:
 (:relative <RELATIVE-GEOMETRY>) or (:absolute <ABSOLUTE-GEOMETRY>)."
-  (let* ((relative-geometry (2dd-get-relative-geometry rect))
-         (output-list (if relative-geometry
-                          (list :relative relative-geometry)
-                        (list :absolute (2dd-geometry rect)))))
-    (prin1-to-string (if additional-info
-                         (nconc output-list additional-info)
-                       output-list))))
+  (cl-flet ((relative-geometry
+             ()
+             (let ((raw (2dd--get-raw-rect-relative-geometry rect)))
+               (if (and raw (listp raw))
+                   ;; It's a relative list describing a parent division
+                   (plist-get raw :description)
+                 ;; it's a normal rectangle.
+                 raw))))
+    (let* ((relative-geometry (relative-geometry))
+           (output-list (if relative-geometry
+                            (list :relative relative-geometry)
+                          (list :absolute (2dd-geometry rect)))))
+      (prin1-to-string (if additional-info
+                           (nconc output-list additional-info)
+                         output-list)))))
 (defsubst 2dd--clone-2dg-rect (any-rect)
   "Create a clone of ANY-RECT returning only a raw 2dg-rect."
   (2dg-rect :x-min (2dg-x-min any-rect)
@@ -280,6 +288,50 @@ will be cleared."
       ;; Best to clear them and not be wrong than leave them and be
       ;; incorrect.
       (setf relative-rect nil))))
+(cl-defmethod 2dd-set-from ((rect 2dd-rect) geometry-description &optional parent-canvas)
+  "Set the geometry of RECT to match what GEOMETRY-DESCRIPTION returns.
+
+Currently GEOMETRY-DESCRIPTION may only take a single form, a
+property list with :lambda and :description properties.  The
+:lambda value must be a lambda which takes no arguments and
+returns an absolute coordinate 2dg-rect for the drawing to take.
+Currently. :description can be anything.
+
+PARENT-CANVAS is not used."
+  (unless parent-canvas
+    (error "Unable to use geometry-description list in 2dd-set-from without a parent canvas"))
+  (with-slots ((rectg _geometry) (relative-rect _relative-geometry)) rect
+    (let* ((provider (plist-get geometry-description :lambda))
+           (relative-rect (funcall provider))
+           (source-rect (2dg-absolute-coordinates parent-canvas relative-rect)))
+      (if (null rectg)
+          ;; missing a rect entirely, create one.
+          (setf rectg (2dd--clone-2dg-rect source-rect))
+      ;; rect exists, just set it.
+      (oset rectg x-min (oref source-rect x-min))
+      (oset rectg x-max (oref source-rect x-max))
+      (oset rectg y-min (oref source-rect y-min))
+      (oset rectg y-max (oref source-rect y-max))))
+    (2dd-set-relative-geometry rect geometry-description)))
+
+(defun 2dd--get-raw-rect-relative-geometry (rect)
+  "Return the raw relative geometry.
+
+TODO - figure out how to do this correctly, I'm going around the
+object system."
+  (oref rect _relative-geometry))
+(cl-defmethod 2dd-get-relative-geometry ((rect 2dd-rect))
+  "Return the relative geometry (to parent) of RECT.
+
+Relative geometry for a 2dd-rect may be a 2dg-rect containing the
+relative coordinates or it may be a property list with a :lambda
+propert which must be funcall'd to get the relative 2dg-rect.
+This function will return the existing 2dg-rect or the 2dg-rect
+returned by a lambda."
+  (let ((relative-geo (cl-call-next-method)))
+    (if (and relative-geo (listp relative-geo))
+        (funcall (plist-get relative-geo :lambda))
+      relative-geo)))
 
 (cl-defmethod 2dd--plot-update ((rect 2dd-rect) (old-parent-canvas 2dd-canvas) (new-parent-canvas 2dd-canvas) child-fn)
   "Update RECT based on a parent drawing changing.
@@ -359,7 +411,6 @@ CHILD-FN should produce a list of all child drawings of a given
 ;;             (oset drawing-rect y-max (oref absolute-rect y-max)))
 ;;           t)
 ;;       nil)))
-
 (cl-defmethod 2dd-leaving-segment-collision-edge ((drawing-rect 2dd-rect) (pt 2dg-point))
   "If you leave centroid of RECT headed towards PT, which edge do you hit?
 

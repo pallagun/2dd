@@ -52,6 +52,14 @@ divisions inside the main rectangle.")
             (if geo (2dg-pprint geo) 'nil)
             (if relative-geo (2dg-pprint relative-geo) nil)
             "??Divisions??")))
+(defun 2dd--build-relative-division-rect-reference (division-rect idx)
+  "Return a list describing IDX-th division within DIVISION-RECT.
+
+This list may be used by other drawings which are locked to the
+division."
+  (list :lambda (lambda ()
+                  (2dd-get-division division-rect idx))
+        :description (list :division-idx idx)))
 
 (defun 2dd--division-rect-get-renderable-separators (rect)
   "From RECT, determine all division separators which must be drawn."
@@ -302,6 +310,9 @@ If DIVISION-RECTANGLES fails validation an error will be thrown."
         (mapcar (lambda (division)
                   (2dg-absolute-coordinates outer-shell division))
                 (2dd-get-divisions rect))))
+(cl-defmethod 2dd-get-division ((rect 2dd-division-rect) (division-idx integer))
+  "Return the division (in relative coordinates) at division-idx."
+  (nth division-idx (2dd-get-divisions rect)))
 (cl-defmethod 2dd-set-divisions :before ((this 2dd-division-rect) value)
   "Ensure that divisionps in VALUE do not violate any 2dd-division-rect constraints.
 
@@ -517,14 +528,6 @@ GEOMETRY is a list containing ordered divisions."
                                                                 division
                                                                 child-fn)))
                finally return success))))
-
-
-(cl-defmethod 2dd-handle-parent-change ((drawing 2dd-division-rect) (new-parent-canvas 2dd-canvas))
-  "Update DRAWING from stored relative coordinates to NEW-PARENT-CANVAS.
-
-Returns non-nil if the drawing was updated, nil if it was not
-able to be updated."
-  (cl-call-next-method))
 
 (provide '2dd-division-rect)
 ;;; 2dd-division-rect.el ends here

@@ -244,6 +244,15 @@ TODO - This could be overridden, I'm not sure if I ever want that.  Figure that 
   "Equivalent of (object-of-class-p ANY '2dd-with-divided-inner-canvas)."
   (object-of-class-p any '2dd-with-divided-inner-canvas))
 
+
+;; TODO: this needs to be enhanced.
+;; it should be able to provide
+;; -a description (for serialization)
+;; -a lambda or value of the parent relative coordinates.
+;; -a lambda or value of the absolute coordinates.
+;; -a pointer to parent???
+;; Currently there's just a weird ad hoc list in division-rect that it generates
+;; and 2dd-rect somewhat knows how to use.
 (defclass 2dd-with-parent-relative-location ()
   ((_relative-geometry :initform nil
                        :writer 2dd-set-relative-geometry
