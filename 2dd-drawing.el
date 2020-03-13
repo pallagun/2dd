@@ -224,10 +224,15 @@ Return is of the form '(EDIT-IDX-NUM . EDIT-IDX-POINT)"
 
 TODO - This could be overridden, I'm not sure if I ever want that.  Figure that out."
   t)
-(cl-defgeneric 2dd-get-inner-canvas ((drawing-with-inner 2dd-with-inner-canvas))
-  "Return the current inner canvas of DRAWING-WITH-INNER.")
+(cl-defgeneric 2dd-get-inner-canvas ((drawing 2dd-drawing))
+  "Return the current inner canvas of DRAWING-WITH-INNER.
+
+Default implementation is that there is no inner canvas."
+  nil)
 (cl-defmethod 2dd-get-inner-canvas ((drawing-with-inner 2dd-with-inner-canvas))
-  "Return the current inner canvas of DRAWING-WITH-INNER."
+  "Return the current inner canvas of DRAWING-WITH-INNER.
+
+2dd-with-inner-canvas objects must implement this function."
   (error "Must implement 2dd-get-inner-canvas for %s"
          (eieio-object-class-name drawing-with-inner)))
 (cl-defmethod 2dd-set-padding ((drawing 2dd-with-inner-canvas) (padding-horizontal number) (padding-vertical number))

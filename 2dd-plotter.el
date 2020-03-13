@@ -11,6 +11,12 @@
 (require '2dd-point)
 (require '2dd-util)
 
+(defconst 2dd-plot-default-link-min-segment-distance 1.0
+  "Default minimum length of a link segment during plotting.")
+(defconst 2dd-plot-default-link-min-terminal-segment-distance 2.0
+  "Default minimum length of the link's starting and ending segments")
+
+
 ;; "rectangles and nodes first, then arrows approach."
 ;; for plotting, you should supply a tree's root node
 ;; 1) go through all rect and point renderabel items and divide them out.
@@ -51,7 +57,8 @@ be replotted.  It will be called as (funcall
 PRESERVE-DRAWING-P-FN drawing).
 
 SETTINGS is an optional plist of settings including the keys:
-':method - 'simple-grid is default
+:rect-method - 'simple-grid is default
+:link-method - 'nearest-edge is default
 
 simple-grid keys:
 ':sibling-margin-vertical
@@ -65,11 +72,60 @@ is external to the element, Padding is internal."
     (error "Child-fn must be a function"))
   (unless (functionp preserve-drawing-p-fn)
     (error "Preserve-drawing-p-fn must be a function"))
-  (let ((method (or (plist-get settings :method)
-                    'simple-grid)))
-    (cond ((eq method 'simple-grid)
-           (2dd--plot-simple-grid root-drawing canvas child-fn preserve-drawing-p-fn settings))
-          (t (error "Unknown drawing method: %s" method)))))
+  (let ((rect-method (or (plist-get settings :rect-method) 'simple-grid))
+        (link-method (or (plist-get settings :link-method) 'nearest-edge)))
+    ;; rectangles first, then links.
+    (case rect-method
+      ('simple-grid
+       (2dd--plot-simple-grid root-drawing
+                              canvas
+                              child-fn
+                              preserve-drawing-p-fn
+                              settings))
+      (_
+       (error "Unknown drawing rect-method: %s" rect-method)))
+    ;; next links
+    (case link-method
+      ('nearest-edge
+       (2dd--plot-nearest-edge root-drawing
+                               canvas
+                               child-fn
+                               preserve-drawing-p-fn
+                               settings))
+      (_
+       (error "Unknown drawing link-method: %s" link-method)))
+    ))
+
+(defun 2dd--plot-nearest-edge (drawing canvas child-fn preserve-drawing-p-fn settings &optional force-replot)
+  "Plot links using a nearest-edge method."
+  (when (2dd-link-class-p drawing)
+    (2dd--plot-nearest-edge-worker drawing canvas))
+  (let ((inner-canvas (2dd-get-inner-canvas drawing)))
+    (cl-loop for child in (funcall child-fn drawing)
+             do (2dd--plot-nearest-edge child
+                                        inner-canvas
+                                        child-fn
+                                        preserve-drawing-p-fn
+                                        settings
+                                        nil))))
+(defun 2dd--plot-nearest-edge-worker (link canvas)
+  "Very bad plotter that connects the tops of boxes."
+   (let ((source-connector (2dd-get-source-connector link))
+        (target-connector (2dd-get-target-connector link)))
+    (unless (2dd-has-location source-connector)
+      (2dd-set-location source-connector '(:edge up :relative-coord 0.5)))
+    (unless (2dd-has-location target-connector)
+      (2dd-set-location target-connector '(:edge up :relative-coord 0.5)))
+    (let ((path (2dg-build-path-cardinal (2dd-connection-point source-connector)
+                                         (2dd-connection-point target-connector)
+                                         (2dg-vector-from-direction
+                                          (2dd-from-connectee-direction source-connector))
+                                         (2dg-vector-from-direction
+                                          (2dd-to-connectee-direction target-connector))
+                                         2dd-plot-default-link-min-segment-distance
+                                         2dd-plot-default-link-min-terminal-segment-distance
+                                         2dd-plot-default-link-min-terminal-segment-distance)))
+      (2dd-set-inner-path link (2dg-truncate path 1 1)))))
 
 (defun 2dd---simple-grid-dimensions-by-num-children (num-children)
   "Given a NUM-CHILDREN return the dimensions of a grid which can hold them.
@@ -80,6 +136,8 @@ It will be able to hold at least that many children, possibly more."
     (list :columns num-columns
           :rows (ceiling (/ (float num-children) (float num-columns))))))
 (defun 2dd--plot-simple-grid (drawing canvas child-fn preserve-drawing-p-fn settings &optional force-replot parent-inner-canvas)
+  ;; TODO - fix this, the CANVAS argument is no longer really a
+  ;; canvas, it's a geometry that must be used.
   "When force-replot is true it's because some parent drawing got replotted.
 
 When plotting in simple grid mode:
@@ -228,57 +286,6 @@ to maintain relative positions and enforce desired constraints."
                                          child-fn
                                          (when parent-drawing
                                            (2dd-get-inner-canvas parent-drawing)))))
-
-;; TODO - update plot has to be hung on the drawings,
-;; (defun 2dd--update-plot-worker (drawing new-geometry child-fn parent-canvas &optional force-set)
-;;   "Update child drawings after their parent is modified."
-;;   (let ((child-drawings (funcall child-fn drawing))
-;;         (prev-inner-canvas (2dd-get-inner-canvas drawing)))
-
-;;     ;; Update this drawing, do it via relative parent change if possible.
-;;     ;; otherwise resort to absolute change.
-;;     (if force-set
-;;         ;; force set is true, simply set it.
-;;         (2dd-set-from drawing new-geometry parent-canvas)
-;;       ;; not forcing, try to handle via parent change and fall back to setting.
-;;       (unless (2dd-handle-parent-change drawing parent-canvas)
-;;         (2dd-set-from drawing new-geometry parent-canvas)))
-
-;;     (if child-drawings
-;;         (let ((all-ok (lambda (update-success-list)
-;;                         ;; TODO - find out why I can't (apply 'and (list-of-t-or-nil))
-;;                         (eval (cons 'and update-success-list))))
-;;               (new-inner-canvas (2dd-get-inner-canvas drawing)))
-;;           (if (2dd-division-rect-class-p drawing)
-;;               ;; division rect - all child drawings are controlled by the division rect
-;;               (let ((divisions (2dd-get-divisions-absolute drawing)))
-;;                 (cl-loop with results = nil
-;;                          for child in child-drawings
-;;                          for division in divisions
-;;                          do (push (2dd--update-plot-worker child
-;;                                                            division
-;;                                                            child-fn
-;;                                                            new-inner-canvas
-;;                                                            t)
-;;                                   results)
-;;                          finally return (funcall all-ok results)))
-;;             ;; normal rectangle child, use relative positions
-;;             ;; report success as the (and of all your child successes).
-;;             (funcall all-ok
-;;                      (mapcar (lambda (child)
-;;                                (when (not (2dd-link-class-p child))
-;;                                  (let* ((relative-coord (or (2dd-get-relative-geometry child)
-;;                                                             (2dg-relative-coordinates prev-inner-canvas
-;;                                                                                       (2dd-geometry child))))
-;;                                         (new-absolute-coord (2dg-absolute-coordinates new-inner-canvas
-;;                                                                                       relative-coord)))
-;;                                    (2dd--update-plot-worker child
-;;                                                             new-absolute-coord
-;;                                                             child-fn
-;;                                                             new-inner-canvas))))
-;;                              child-drawings))))
-;;       ;; When there are no children, report success.
-;;       t)))
 
 (cl-defgeneric 2dd-validate-constraints ((drawing 2dd-drawing) (parent 2dd-drawing) (siblings list))
   "Validate that DRAWING satisfies all constrants relative to PARENT and SIBLINGS.

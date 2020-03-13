@@ -27,6 +27,17 @@ canvas.  It has an inner-canvas and a label")
   "Restrict THIS to have a VALUE which is of type 2dg-rect."
   (unless (2dg-rect-p value)
     (error "2dd-rect must use a 2dg-rect as their geometry")))
+(defun 2dd--rect-edge-point (rect edge relative-coord)
+  "Return the coordinate of absolute coordinate of RELATIVE-COORD along EDGE of RECT.
+
+RECT must be a 2dd-rect, EDGE must be a 2dg edge/direction
+enumerator, RELATIVE-COORD must be a floating point between 0.0
+and 1.0."
+  (let ((geo (oref rect _geometry)))
+    (if geo
+        (let ((edge-segment (2dg-edge geo edge)))
+          (2dg-absolute-coordinates edge-segment relative-coord))
+      (error "2dd-rect-edge-point: 2dd-rect has no valid geometry"))))
 (cl-defmethod 2dd-pprint ((rect 2dd-rect))
   "Pretty print RECT."
   (with-slots ((geo _geometry) (relative-geo _relative-geometry)) rect

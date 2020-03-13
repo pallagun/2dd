@@ -70,7 +70,16 @@ drawings for other drawings.")
   (unless (or (null target-drawing)
               (2dd-drawing-class-p target-drawing))
     (error "Unable to set target for a link drawing to anything other than nil or another drawing"))
-  (2dd-set-connectee (oref link _target-connector) source-drawing))
+  (2dd-set-connectee (oref link _target-connector) target-drawing))
+(cl-defgeneric 2dd-set-inner-path ((link 2dd-link) path)
+  "Set the path of LINK to PATH.")
+(cl-defmethod 2dd-set-inner-path ((link 2dd-link) (inner-path 2dg-cardinal-path))
+  "Set LINK's inner path to be INNER-PATH."
+  ;; TODO - check here to ensure cardinal directions between connectors???
+  (oset link _inner-path inner-path))
+(cl-defgeneric 2dd-clear-inner-path ((link 2dd-link))
+  "Set the inner path of LINK to be nil."
+  (oset link _inner-path nil))
 (cl-defmethod 2dd-serialize-geometry ((link 2dd-link) &optional additional-info)
   "Serialize LINK to a string.
 
@@ -81,9 +90,7 @@ Returns a stringified list in the form:
     (prin1-to-string
      (list :source (2dd-serialize-geometry _source-connector)
            :target (2dd-serialize-geometry _target-connector)
-           :inner-path (if _inner-path
-                           (2dg-points _inner-path)
-                         nil)))))
+           :path (2dd-all-link-points link)))))
 (cl-defgeneric 2dd-all-link-points ((link 2dd-link) &optional offset)
   "Get the full path of LINK with optional start/end OFFSET from ends.
 
@@ -113,7 +120,7 @@ path returned is always cardinal."
           (let ((inner-path-pts (when _inner-path (2dg-points _inner-path))))
             (if (null offset)
                 ;; No offset, return the exact path.
-                (nconc (cons raw-start inner-path-points)
+                (nconc (cons raw-start inner-path-pts)
                        (list raw-end))
               ;; offset desired, get as close as possible.
               (let ((start (2dd-connection-point _source-connector offset))
