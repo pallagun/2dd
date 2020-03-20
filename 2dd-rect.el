@@ -22,9 +22,11 @@
 canvas.  It has an inner-canvas and a label")
 (defsubst 2dd-rect-class-p (any)
   "Equivalent of (object-of-class-p ANY '2dd-rect)"
-  (object-of-class-p any '2dd-rect))
+  (and (recordp any)
+       (object-of-class-p any '2dd-rect)))
 (cl-defmethod 2dd-set-geometry :before ((this 2dd-rect) value)
   "Restrict THIS to have a VALUE which is of type 2dg-rect."
+  ;; TODO - this can be done using generics, no need to do it here.
   (unless (2dg-rect-p value)
     (error "2dd-rect must use a 2dg-rect as their geometry")))
 (defun 2dd--rect-edge-point (rect edge relative-coord)
@@ -191,23 +193,6 @@ Points start at the bottom left and go counter clock wise."
      (7 (2dg-point :x x-min :y (/ (+ y-max y-min) 2.0)))
      ;; err
      (otherwise (error "Invalid edit-mode idx: %s" idx)))))
-(cl-defmethod 2dd-get-closest-edit-idx ((rect 2dd-rect) (point 2dg-point))
-  "Return RECT's closest edit-idx to POINT.
-
-Return is of the form '(EDIT-IDX-NUM . EDIT-IDX-POINT)"
-  (let ((best-idx)
-        (best-idx-pt)
-        (best-distance)
-        (edit-pts (2dd-edit-idx-points rect)))
-    (cl-loop for edit-pt in edit-pts
-             for edit-idx from 0 to (1- (length edit-pts))
-             for distance = (2dg-distance-sq edit-pt point)
-             when (or (null best-distance)
-                      (< distance best-distance))
-             do (setf best-idx edit-idx
-                      best-idx-pt edit-pt
-                      best-distance distance)
-             finally return `(,best-idx . ,best-idx-pt))))
 
 (cl-defmethod 2dd-build-move-edited-geometry ((rect 2dd-rect) (move-vector 2dg-point))
   "Given a RECT, and a MOVE-DIRECTION, move in one pixel in that direction."
@@ -390,17 +375,23 @@ CHILD-FN should produce a list of all child drawings of a given
   "Update RECT to have RECTG geometry, cascade child drawings as needed."
   (let ((old-inner-canvas (2dd-get-inner-canvas rect)))
     (2dd-set-from rect rectg parent-canvas)
-    (let ((children (funcall child-fn rect))
-          (new-inner-canvas (2dd-get-inner-canvas rect))
-          (success t))
-      (cl-loop for child in children
-               do (setq success
-                        (and success
-                             (2dd--plot-update child
-                                               old-inner-canvas
-                                               new-inner-canvas
-                                               child-fn)))
-               finally return success))))
+
+    ;; (let ((children (funcall child-fn rect))
+    ;;       (new-inner-canvas (2dd-get-inner-canvas rect))
+    ;;       (success t))
+    ;;   (cl-loop for child in children
+    ;;            do (setq success
+    ;;                     (and success
+    ;;                          (2dd--plot-update child
+    ;;                                            old-inner-canvas
+    ;;                                            new-inner-canvas
+    ;;                                            child-fn)))
+    ;;            finally return success))))
+
+    (2dd--start-plot-update (funcall child-fn rect)
+                            old-inner-canvas
+                            (2dd-get-inner-canvas rect)
+                            child-fn)))
 
 ;; TODO - make a defgeneric for this.
 ;; (cl-defmethod 2dd-handle-parent-change ((drawing 2dd-rect) (new-parent-canvas 2dd-canvas))

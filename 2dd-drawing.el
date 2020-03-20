@@ -34,12 +34,14 @@ constraints at the same time.")
                 :reader 2dd-get-constraint
                 :writer 2dd-set-constraint
                 :type symbolp
-                :documentation "Constraints must be one of tContainment must be one of (captive, free, semicaptive)")
+                :documentation "Constraints must be one
+                of (captive, free)")
    (_geometry :initarg :geometry
               :initform nil
               :writer 2dd-set-geometry
               :reader 2dd-geometry
-              :documentation "The 2dg object backing this drawing"))
+              :documentation "The object backing this drawing.
+              Note, no checks are performed before setting."))
   :abstract t
   :documentation "This is a thing which can be drawn.  A rectangle, an arrow, a label, etc.")
 (defsubst 2dd-drawing-class-p (any)
@@ -137,6 +139,17 @@ Note: this function assumes that constraints are already
 validated."
   (error "Unable to 2dd--set-geometry-and-plot-update for drawing of type: %s"
          (eieio-object-class-name drawing)))
+(defsubst 2dd--start-plot-update (children old-inner-canvas new-inner-canvas child-fn)
+  "Call 2dd--plot-update on all children and return non-nil on success."
+  (cl-loop with success = t
+           for child in children
+           do (setq success
+                    (and success
+                         (2dd--plot-update child
+                                           old-inner-canvas
+                                           new-inner-canvas
+                                           child-fn)))
+           finally return success))
 
 (cl-defmethod 2dd-num-edit-idxs ((drawing 2dd-drawing))
   "Non-editable drawings always have zero edit indices."
@@ -196,6 +209,23 @@ and should not mutate anything.")
 Return is of the form '(EDIT-IDX-NUM . EDIT-IDX-POINT)"
   (error "2dd-get-closest-edit-idx: Not implemented for drawing type: %s"
          (eieio-object-class-name drawing)))
+(cl-defmethod 2dd-get-closest-edit-idx ((rect 2dd-editable-drawing) (point 2dg-point))
+  "Return RECT's closest edit-idx to POINT.
+
+Return is of the form '(EDIT-IDX-NUM . EDIT-IDX-POINT)"
+  (let ((best-idx)
+        (best-idx-pt)
+        (best-distance)
+        (edit-pts (2dd-edit-idx-points rect)))
+    (cl-loop for edit-pt in edit-pts
+             for edit-idx from 0 to (1- (length edit-pts))
+             for distance = (2dg-distance-sq edit-pt point)
+             when (or (null best-distance)
+                      (< distance best-distance))
+             do (setf best-idx edit-idx
+                      best-idx-pt edit-pt
+                      best-distance distance)
+             finally return `(,best-idx . ,best-idx-pt))))
 
 (defclass 2dd-with-label ()
   ((_label :initarg :label

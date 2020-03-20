@@ -110,22 +110,29 @@ is external to the element, Padding is internal."
                                         nil))))
 (defun 2dd--plot-nearest-edge-worker (link canvas)
   "Very bad plotter that connects the tops of boxes."
-   (let ((source-connector (2dd-get-source-connector link))
+  (let ((source-connector (2dd-get-source-connector link))
         (target-connector (2dd-get-target-connector link)))
-    (unless (2dd-has-location source-connector)
-      (2dd-set-location source-connector '(:edge up :relative-coord 0.5)))
-    (unless (2dd-has-location target-connector)
-      (2dd-set-location target-connector '(:edge up :relative-coord 0.5)))
-    (let ((path (2dg-build-path-cardinal (2dd-connection-point source-connector)
-                                         (2dd-connection-point target-connector)
-                                         (2dg-vector-from-direction
-                                          (2dd-from-connectee-direction source-connector))
-                                         (2dg-vector-from-direction
-                                          (2dd-to-connectee-direction target-connector))
-                                         2dd-plot-default-link-min-segment-distance
-                                         2dd-plot-default-link-min-terminal-segment-distance
-                                         2dd-plot-default-link-min-terminal-segment-distance)))
-      (2dd-set-inner-path link (2dg-truncate path 1 1)))))
+    (cl-flet ((set-connector-location
+               (connector)
+               (if (2dd-get-connectee connector)
+                   ;; This has something to connect to, assume it's a rect for now.
+                   (2dd--set-location connector '(:edge up :relative-coord 0.5))
+                 ;; This does not have something to connect to.  Place it anywhere.
+                 (2dd--set-location connector `(:edge up :absolute-coord ,(2dg-centroid canvas))))))
+      (unless (2dd-has-location source-connector)
+        (set-connector-location source-connector))
+      (unless (2dd-has-location target-connector)
+        (set-connector-location target-connector))
+      (let ((path (2dg-build-path-cardinal (2dd-connection-point source-connector)
+                                           (2dd-connection-point target-connector)
+                                           (2dg-vector-from-direction
+                                            (2dd-from-connectee-direction source-connector))
+                                           (2dg-vector-from-direction
+                                            (2dd-to-connectee-direction target-connector))
+                                           2dd-plot-default-link-min-segment-distance
+                                           2dd-plot-default-link-min-terminal-segment-distance
+                                           2dd-plot-default-link-min-terminal-segment-distance)))
+        (2dd-set-inner-path link (2dg-truncate path 1 1))))))
 
 (defun 2dd---simple-grid-dimensions-by-num-children (num-children)
   "Given a NUM-CHILDREN return the dimensions of a grid which can hold them.

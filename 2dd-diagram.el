@@ -47,8 +47,28 @@ Selection preference order:
   (let ((start-drawing (oref diagram _root)))
     (nconc
      ;; (2dd---find-point selection-rect start-drawing)
-     ;; (2dd---find-link selection-rect start-drawing)
+     (nreverse (2dd---find-link selection-rect start-drawing child-fn))
      (nreverse (2dd---find-other selection-rect start-drawing child-fn)))))
+
+
+(defun 2dd---find-link (selection-rect drawing child-fn)
+  "Get first transition element in SELECTION-RECT.
+
+Returns a list (ordered by least specific) of all 2dd-link items
+which are in the selection-rect.
+
+Start searching at DRAWING  When nothing is found return
+nil."
+  (let* ((per-child-results (mapcar (lambda (child)
+                                      (2dd---find-link selection-rect child child-fn))
+                                    (funcall child-fn drawing)))
+         (child-results (apply #'nconc per-child-results)))
+
+    (if (and (2dd-link-class-p drawing)
+             (2dg-has-intersection selection-rect
+                                   (2dd-get-full-path drawing)))
+        (cons drawing child-results)
+      child-results)))
 
 (cl-defgeneric 2dd-is-drawing-in-selection ((drawing 2dd-drawing) (selection-rect 2dg-rect))
   "This function returns non-nil if SELECTION-RECT would select DRAWING.")
@@ -98,7 +118,6 @@ drawing.")
                            (car transformers)
                            (cdr transformers))
       (2dd--scratch-write scratch))))
-
 (defun 2dd---render-worker (scratch drawing canvas viewport child-fn x-transformer y-transformer)
   "Draw everything recursively."
   (2dd-render drawing scratch x-transformer y-transformer viewport)
