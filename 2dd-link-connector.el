@@ -30,6 +30,19 @@
                change."))
   :documentation "Describes a connection point, possibly to another drawing.")
 
+(defun 2dd--link-connector-fake-point (connector fake-location)
+  "Return the connection point of CONNECTOR if it had FAKE-LOCATION."
+  (let ((connectee (oref connector connectee))
+        (edge (plist-get fake-location :edge))
+        (relative-coord (plist-get fake-location :relative-coord)))
+    (if (and edge relative-coord)
+        ;; use the connectee edge and relative coord.
+        (2dd--rect-edge-point connectee
+                              edge
+                              relative-coord)
+      ;; Use the aboslute coord if you have it.
+      (plist-get fake-location :absolute-coord))))
+
 (cl-defgeneric 2dd-connection-point ((connector 2dd-link-connector) &optional offset)
   "Get the location of this CONNECTOR.
 
@@ -147,13 +160,12 @@ relative coord the absolute-coord will be ignored.
           location
           (cond ((and connectee edge relative-coord)
                  ;; connect to connectee's edge
-                 (let ((relative-coord (or relative-coord 0.5)))
-                   (list :lambda (lambda (rect-drawing)
-                                   (2dd--rect-edge-point rect-drawing
-                                                         edge
-                                                         relative-coord))
-                         :edge edge
-                         :relative-coord relative-coord)))
+                 (list :lambda (lambda (rect-drawing)
+                                 (2dd--rect-edge-point rect-drawing
+                                                       edge
+                                                       relative-coord))
+                       :edge edge
+                       :relative-coord relative-coord))
                 (absolute-coord
                  ;; Connect to nothing at an arbitrary point
                  (let ((edge (or edge 'up)))

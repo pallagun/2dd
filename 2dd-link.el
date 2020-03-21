@@ -42,7 +42,18 @@ No checking is done before geometry is changed."
         (inner-points (plist-get geo-plist :inner-points)))
     (unless (and source target inner-points)
       (error "2dd-set-geometry (2dd-link) must supply source, target and inner-points information"))
+
     (with-slots (_source-connector _target-connector _inner-path) link
+
+      (assert (let ((test-start (2dd--link-connector-fake-point _source-connector
+                                                                source))
+                    (test-end (2dd--link-connector-fake-point _target-connector
+                                                              target)))
+                (2dg-is-cardinal-pts-list-p (append (list test-start)
+                                                    inner-points
+                                                    (list test-end))))
+              t "Tried to set a link geometry that was not a cardinal path")
+
       (2dd--set-location _source-connector source)
       (2dd--set-location _target-connector target)
       (2dd-set-inner-path link inner-points))))
@@ -174,7 +185,7 @@ path returned is always cardinal."
                           (append inner-path-pts (list end))
                         (append inner-path-pts
                                 (2dg---path-stretch
-                                 (list path-end rawend)
+                                 (list path-end raw-end)
                                  path-end
                                  end))))
                   ;; no inner points.  stretch the originals if needed
@@ -214,12 +225,18 @@ This will modify the LINK's inner path in place."
                (setq slack-y (2dg-y slack-allowance)))
               (t
                (error "2dd-simplify: slack-allowance must be a number or 2dg-point")))
-        (oset link _inner-path
-              (2dg-cardinal-path :points
-                                 (2dg-truncate
-                                  (2dg-simplified
-                                   (2dg-slack-simplified full-path slack-x slack-y))
-                                  1 1)))))))
+        (let ((new-inner-points (2dg-truncate
+                                 (2dg-simplified
+                                  (2dg-slack-simplified full-path slack-x slack-y))
+                                 1 1)))
+          ;; TODO - another paranoia check, this should be an assert.
+          (assert (2dg-is-cardinal-pts-list-p
+                   (append (list (2dd-connection-point (oref link _source-connector)))
+                           new-inner-points
+                           (list (2dd-connection-point (oref link _target-connector)))))
+                  t
+                  "2dd-simplify for a link returned non-cardinal geometry")
+          (oset link _inner-path (2dg-cardinal-path :points new-inner-points)))))))
 
 (cl-defmethod 2dd-render ((link 2dd-link) scratch x-transformer y-transformer viewport &rest args)
   "Render LINK to SCRATCH buffer using X-TRANSFORMER and Y-TRANSFORMER.
@@ -324,19 +341,21 @@ CHILD-FN should produce a list of all child drawings of a given
           (cond ((and source-connected (not target-connected))
                  ;; source is connected, target is not.  force target
                  ;; to mirror source's move.
-                 (setq target-pt
-                       (2dd--move-location _target-connector
-                                           (2dg-add last-target-pt
-                                                    (2dg-subtract source-pt
-                                                                  last-source-pt)))))
+                 (let ((target-location
+                        (2dd--move-location _target-connector
+                                            (2dg-add last-target-pt
+                                                     (2dg-subtract source-pt
+                                                                   last-source-pt)))))
+                   (setq target-pt (plist-get target-location :absolute-coord))))
                 ((and target-connected (not source-connected))
                  ;; target is connected, source is not, force source
                  ;; to mirror target's move
-                 (setq source-pt
-                       (2dd--move-location _source-connector
-                                           (2dg-add last-source-pt
-                                                    (2dg-subtract target-pt
-                                                                  last-target-pt)))))))
+                 (let ((source-location
+                        (2dd--move-location _source-connector
+                                            (2dg-add last-source-pt
+                                                     (2dg-subtract target-pt
+                                                                   last-target-pt)))))
+                   (setq source-pt (plist-get source-location :absolute-coord))))))
 
         (let* ((last-full-pts (append (cons last-source-pt
                                             (2dg-points _inner-path))
@@ -507,23 +526,24 @@ Constraints: (TODO - respect containment?)
                              ;; redundant edit idx or otherwise done
                              ;; weird things to the path, simplify the
                              ;; newly created area
-                             (let* (;; (new-pts (2dg-points new-path-piece))
-                                    ;; ;; (new-starting-pt (seq-take new-pts 2))
-                                    ;; (new-questionable-pts (append (cdr new-pts)
-                                    ;;                               (list next-next-point)))
-                                    ;; (slack (+ (2dg-box-magnitude move-vector)
-                                    ;;           min-perpendicular-distance))
-                                    ;; (simplified (2dg-simplified
-                                    ;;              (2dg-slack-simplified new-questionable-pts
-                                    ;;                                    slack
-                                    ;;                                    slack)))
-                                    (larger-new-piece (2dg-simplified (2dg-points new-path-piece)
-                                                                     (list next-next-point))))
+                             (let* ((new-pts (2dg-points new-path-piece))
+                                     ;; (new-starting-pt (seq-take new-pts 2))
+                                    (new-questionable-pts (append (cdr new-pts)
+                                                                  (list next-next-point)))
+                                    (slack (+ (2dg-box-magnitude move-vector)
+                                              min-perpendicular-distance))
+                                    (simplified (2dg-simplified
+                                                 (2dg-slack-simplified new-questionable-pts
+                                                                       slack
+                                                                       slack)))
+                                    ;; (larger-new-piece (2dg-simplified (2dg-points new-path-piece)
+                                    ;;                                   (list next-next-point)))
+                                    )
                                (list :source new-source-location
-                                     ;; :inner-points (append simplified
-                                     ;;                       (nthcdr 3 current-pts))
-                                     :inner-points (append (cdr larger-new-piece)
+                                     :inner-points (append simplified
                                                            (nthcdr 3 current-pts))
+                                     ;; :inner-points (append (cdr larger-new-piece)
+                                     ;;                       (nthcdr 3 current-pts))
                                      :target (2dd-serialize-geometry
                                               (oref link _target-connector))))
                            ;; there was no next-next point so use what you have.
