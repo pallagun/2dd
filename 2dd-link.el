@@ -679,7 +679,8 @@ Constraints: (TODO - respect containment?)
                  ;; along the same edge, no edge changes are allowed.
                  (let* ((new-source-location (2dd--move-location
                                               (oref link _source-connector)
-                                              nudged-start))
+                                              nudged-start
+                                              t))
                         (source-edge (2dd--link-connector-location-edge
                                       source-location))
                         (new-source-edge (2dd--link-connector-location-edge
@@ -694,7 +695,8 @@ Constraints: (TODO - respect containment?)
                  ;; The end point has moved, do something aboeut that.
                  (let* ((new-target-location (2dd--move-location
                                               (oref link _target-connector)
-                                              nudged-end))
+                                              nudged-end
+                                              t))
                         (target-edge (2dd--link-connector-location-edge
                                       target-location))
                         (new-target-edge (2dd--link-connector-location-edge

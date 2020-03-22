@@ -132,7 +132,7 @@ is external to the element, Padding is internal."
                                            2dd-plot-default-link-min-segment-distance
                                            2dd-plot-default-link-min-terminal-segment-distance
                                            2dd-plot-default-link-min-terminal-segment-distance)))
-        (2dd-set-inner-path link (2dg-truncate path 1 1))))))
+        (2dd-set-inner-path link (2dg-truncate (2dg-simplify path) 1 1))))))
 
 (defun 2dd---simple-grid-dimensions-by-num-children (num-children)
   "Given a NUM-CHILDREN return the dimensions of a grid which can hold them.
