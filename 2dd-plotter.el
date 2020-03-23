@@ -110,6 +110,7 @@ is external to the element, Padding is internal."
                                         nil))))
 (defun 2dd--plot-nearest-edge-worker (link canvas)
   "Very bad plotter that connects the tops of boxes."
+  ;; TODO - this plotter should eventually just call out to 2dd-replot-inner-path
   (let ((source-connector (2dd-get-source-connector link))
         (target-connector (2dd-get-target-connector link)))
     (cl-flet ((set-connector-location

@@ -13,6 +13,7 @@
   ((connectee :initarg :connectee
               ;; TODO - set-connectee should first ensure there is no
               ;; connectee reference in the location.
+              :initform nil
               :reader 2dd-get-connectee
               :writer 2dd-set-connectee
               :type (or null 2dd-drawing)
@@ -22,6 +23,7 @@
              :initform nil
              :type list
              :documentation "Where this connector is.")
+   ;; TODO - pretty sure this last point isn't used anymore.
    (last-point :initform nil
                :type (or null 2dg-point)
                :documentation "Wherever the actual connection
@@ -29,6 +31,24 @@
                connection point has changed when there is a
                change."))
   :documentation "Describes a connection point, possibly to another drawing.")
+
+(cl-defmethod make-instance ((class (subclass 2dd-link-connector)) &rest slots)
+  "Ensure all location parameters are properly set."
+  ;; TODO - should this be an :after method?
+  (let ((connector (cl-call-next-method)))
+    (let ((location (plist-get slots :location)))
+      (when location
+        (let ((relative-coord (plist-get location :relative-coord))
+              (edge (plist-get location :edge)))
+          (when (and relative-coord edge)
+            ;; TODO - should this be at the front of the plist to make
+            ;; it more efficient?  - should it not be in a plist at
+            ;; all?
+            (plist-put (oref connector location)
+                       :lambda (2dd--link-connector-build-rect-relative-lambda
+                                edge
+                                relative-coord))))))
+    connector))
 
 (defun 2dd--link-connector-fake-point (connector fake-location)
   "Return the connection point of CONNECTOR if it had FAKE-LOCATION."
@@ -95,6 +115,9 @@ Return nil otherwise."
 Will return nil when this connector is not using edge relative
 positioning."
   (2dd--link-connector-location-edge (oref connector location)))
+(defsubst 2dd--set-link-connector-edge (connector edge)
+  "Set the edge of this CONNECTOR to be EDGE."
+  (plist-put (oref connector location) :edge edge))
 
 (cl-defgeneric 2dd-has-connection ((connector 2dd-link-connector))
   "Return t if CONNECTOR has a connection to another drawing, nil otherwise.")
@@ -123,6 +146,13 @@ positioning."
 (cl-defmethod 2dd-serialize-geometry ((connector 2dd-link-connector))
   "Serialize the parameters of CONNECTOR to a list."
   (2dd--copy-plist-remove (oref connector location) '(:lambda)))
+
+(defsubst 2dd--link-connector-build-rect-relative-lambda (edge relative-coord)
+  "Return a lambda for producing a point from a connectee rectangle based on relative geometry."
+  (lambda (rect-drawing)
+    (2dd--rect-edge-point rect-drawing
+                          edge
+                          relative-coord)))
 
 (cl-defgeneric 2dd--set-location ((connector 2dd-link-connector) location)
   "Set the CONNECTOR's location to be LOCATION.")
@@ -160,10 +190,12 @@ relative coord the absolute-coord will be ignored.
           location
           (cond ((and connectee edge relative-coord)
                  ;; connect to connectee's edge
-                 (list :lambda (lambda (rect-drawing)
-                                 (2dd--rect-edge-point rect-drawing
-                                                       edge
-                                                       relative-coord))
+                 (list :lambda (2dd--link-connector-build-rect-relative-lambda
+                                edge relative-coord)
+                       ;; (lambda (rect-drawing)
+                       ;;   (2dd--rect-edge-point rect-drawing
+                       ;;                         edge
+                       ;;                         relative-coord))
                        :edge edge
                        :relative-coord relative-coord))
                 (absolute-coord
