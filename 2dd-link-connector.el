@@ -143,9 +143,18 @@ positioning."
                     (setq skip-next nil)
                   (setq accumulator (cons elt accumulator))))
            finally return (nreverse accumulator)))
-(cl-defmethod 2dd-serialize-geometry ((connector 2dd-link-connector))
-  "Serialize the parameters of CONNECTOR to a list."
-  (2dd--copy-plist-remove (oref connector location) '(:lambda)))
+(cl-defmethod 2dd-serialize-geometry ((connector 2dd-link-connector) &optional additional-info)
+  "Serialize the parameters of CONNECTOR to a list.
+
+When additional-info is non-nil the absolute coordinate of the
+connector will be added to the serialized geometry even if the
+connector is relative."
+  (let ((geometry (2dd--copy-plist-remove (oref connector location) '(:lambda))))
+    (if additional-info
+        (cons :absolute-coord
+              (cons (2dd-connection-point connector 0) geometry))
+      geometry)))
+
 
 (defsubst 2dd--link-connector-build-rect-relative-lambda (edge relative-coord)
   "Return a lambda for producing a point from a connectee rectangle based on relative geometry."
