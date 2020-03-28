@@ -46,7 +46,11 @@ and 1.0."
     (format "dr:rect(%s:g->%s:rg->%s)"
             (2dd-get-label rect)
             (if geo (2dg-pprint geo) nil)
-            (if relative-geo (2dg-pprint relative-geo) nil))))
+            (if relative-geo
+                (if (listp relative-geo)
+                    (list 'relative-lock (plist-get relative-geo :description))
+                  (2dg-pprint relative-geo))
+              nil))))
 
 (defmacro 2dd--rect-coord-repair (min max)
   "A macro to ensure min is below max, I should not need this.
@@ -364,43 +368,11 @@ CHILD-FN should produce a list of all child drawings of a given
   (let ((old-inner-canvas (2dd-get-inner-canvas rect)))
     (2dd-set-from rect rectg parent-canvas)
 
-    ;; (let ((children (funcall child-fn rect))
-    ;;       (new-inner-canvas (2dd-get-inner-canvas rect))
-    ;;       (success t))
-    ;;   (cl-loop for child in children
-    ;;            do (setq success
-    ;;                     (and success
-    ;;                          (2dd--plot-update child
-    ;;                                            old-inner-canvas
-    ;;                                            new-inner-canvas
-    ;;                                            child-fn)))
-    ;;            finally return success))))
+    (2dd--update-plot-all (funcall child-fn rect)
+                          old-inner-canvas
+                          (2dd-get-inner-canvas rect)
+                          child-fn)))
 
-    (2dd--start-plot-update (funcall child-fn rect)
-                            old-inner-canvas
-                            (2dd-get-inner-canvas rect)
-                            child-fn)))
-
-;; TODO - make a defgeneric for this.
-;; (cl-defmethod 2dd-handle-parent-change ((drawing 2dd-rect) (new-parent-canvas 2dd-canvas))
-;;   "Update DRAWING from stored relative coordinates to NEW-PARENT-CANVAS.
-
-;; Returns non-nil if the drawing was updated, nil if it was not
-;; able to be updated."
-;;   (with-slots ((drawing-rect _geometry) (drawing-relative _relative-geometry)) drawing
-;;     (if drawing-relative
-;;         ;; this drawing has a relative rect and can be updated relative to a parent.
-;;         (let ((absolute-rect (2dg-absolute-coordinates new-parent-canvas drawing-relative)))
-;;           (if (null drawing-rect)
-;;               ;; missing a rect entirely, create one.
-;;               (setf rect absolute-rect)
-;;             ;; rect exists, just set it.
-;;             (oset drawing-rect x-min (oref absolute-rect x-min))
-;;             (oset drawing-rect x-max (oref absolute-rect x-max))
-;;             (oset drawing-rect y-min (oref absolute-rect y-min))
-;;             (oset drawing-rect y-max (oref absolute-rect y-max)))
-;;           t)
-;;       nil)))
 (cl-defmethod 2dd-leaving-segment-collision-edge ((drawing-rect 2dd-rect) (pt 2dg-point))
   "If you leave centroid of RECT headed towards PT, which edge do you hit?
 

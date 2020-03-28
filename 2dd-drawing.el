@@ -139,18 +139,19 @@ Note: this function assumes that constraints are already
 validated."
   (error "Unable to 2dd--set-geometry-and-update-plot for drawing of type: %s"
          (eieio-object-class-name drawing)))
-(defsubst 2dd--update-plot-all (children old-inner-canvas new-inner-canvas child-fn)
+(defun 2dd--update-plot-all (children old-inner-canvas new-inner-canvas child-fn)
   "Call 2dd--update-plot on all CHILDREN.
 
 "
-  (cl-loop with update-results = nil
+  (cl-loop with success = t
            for child in children
-           do (push (2dd--update-plot child
-                                      old-inner-canvas
-                                      new-inner-canvas
-                                      child-fn)
-                    update-results)
-           finally return (apply #'nconc update-results)))
+           do (setq success
+                    (and success
+                         (2dd--update-plot child
+                                           old-inner-canvas
+                                           new-inner-canvas
+                                           child-fn)))
+           finally return success))
 
 (cl-defmethod 2dd-num-edit-idxs ((drawing 2dd-drawing))
   "Non-editable drawings always have zero edit indices."

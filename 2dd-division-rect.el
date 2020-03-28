@@ -530,7 +530,7 @@ updated."
                for division in divisions
                do (setq success
                         (and success
-                             (2dd--set-geometry-and-plot-update child
+                             (2dd--set-geometry-and-update-plot child
                                                                 division
                                                                 child-fn)))
                finally return success))))
