@@ -500,20 +500,26 @@ will be cleared."
 
     (2dd-set-from drawing-rect outer-shell parent-canvas)))
 
-(cl-defmethod 2dd--set-geometry-and-plot-update ((rect 2dd-division-rect) (geometry list) child-fn &optional parent-canvas)
+(cl-defmethod 2dd--set-geometry-and-update-plot ((rect 2dd-division-rect) (geometry list) child-fn &optional parent-canvas)
   "Update RECT to have GEOMETRY.
 
 GEOMETRY will be in the form of a list where the first element is
 a 2dg-rect describing the outer shell.  The second element of
-GEOMETRY is a list containing ordered divisions."
+GEOMETRY is a list containing ordered divisions.
+
+Returns a list of entries describing all drawings which were
+updated."
   ;; first, set divisions, then set outershell to get cascading
   (let ((outer-shell (first geometry))
         (divisions (second geometry)))
     (2dd-set-divisions rect divisions)
-    (2dd--set-geometry-and-plot-update rect outer-shell child-fn parent-canvas)))
+    (2dd--set-geometry-and-update-plot rect outer-shell child-fn parent-canvas)))
 
-(cl-defmethod 2dd--set-geometry-and-plot-update ((rect 2dd-division-rect) (rectg 2dg-rect) child-fn &optional parent-canvas)
-  "Update RECT to have RECTG outer-shell geometry, cascade child drawings as needed."
+
+(cl-defmethod 2dd--set-geometry-and-update-plot ((rect 2dd-division-rect) (rectg 2dg-rect) child-fn &optional parent-canvas)
+  "Update RECT to have RECTG outer-shell geometry, cascade child drawings as needed.
+
+"
   (let ((old-inner-canvas (2dd-get-inner-canvas rect)))
     (2dd-set-from rect rectg parent-canvas)
     (let ((children (funcall child-fn rect))

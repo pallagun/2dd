@@ -105,7 +105,7 @@ Overridable method for ecah drawing to render itself."
   "Set DRAWING's geometry from SOURCE-GEOMETETRY.
 
 When PARENT-CANVAS is suppled and the drawing is capable of holding relative coordinate they will be stored as well.")
-(cl-defgeneric 2dd--plot-update ((drawing 2dd-drawing) (old-parent-canvas 2dd-canvas) (new-parent-canvas 2dd-canvas) child-fn)
+(cl-defgeneric 2dd--update-plot ((drawing 2dd-drawing) (old-parent-canvas 2dd-canvas) (new-parent-canvas 2dd-canvas) child-fn)
   "Update DRAWING based on a parent drawing changing.
 
 Function will return non-nil when changes are applied and nil
@@ -122,9 +122,9 @@ the parent drawing was edited.
 
 CHILD-FN should produce a list of all child drawings of a given
  drawing.  It will be called as: (funcall CHILD-FN ROOT-DRAWING)."
-  (error "Unable to 2dd--plot-update for drawing of type: %s"
+  (error "Unable to 2dd--update-plot for drawing of type: %s"
          (eieio-object-class-name drawing)))
-(cl-defgeneric 2dd--set-geometry-and-plot-update ((drawing 2dd-drawing) new-geometry child-fn &optional parent-canvas)
+(cl-defgeneric 2dd--set-geometry-and-update-plot ((drawing 2dd-drawing) new-geometry child-fn &optional parent-canvas)
   "Update DRAWING to have NEW-GEOMETRY and cascade any needed updates to child drawings.
 
 NEW-GEOMETRY should be specified in absolute coordinates.
@@ -137,19 +137,20 @@ coordinates.
 
 Note: this function assumes that constraints are already
 validated."
-  (error "Unable to 2dd--set-geometry-and-plot-update for drawing of type: %s"
+  (error "Unable to 2dd--set-geometry-and-update-plot for drawing of type: %s"
          (eieio-object-class-name drawing)))
-(defsubst 2dd--start-plot-update (children old-inner-canvas new-inner-canvas child-fn)
-  "Call 2dd--plot-update on all children and return non-nil on success."
-  (cl-loop with success = t
+(defsubst 2dd--update-plot-all (children old-inner-canvas new-inner-canvas child-fn)
+  "Call 2dd--update-plot on all CHILDREN.
+
+"
+  (cl-loop with update-results = nil
            for child in children
-           do (setq success
-                    (and success
-                         (2dd--plot-update child
-                                           old-inner-canvas
-                                           new-inner-canvas
-                                           child-fn)))
-           finally return success))
+           do (push (2dd--update-plot child
+                                      old-inner-canvas
+                                      new-inner-canvas
+                                      child-fn)
+                    update-results)
+           finally return (apply #'nconc update-results)))
 
 (cl-defmethod 2dd-num-edit-idxs ((drawing 2dd-drawing))
   "Non-editable drawings always have zero edit indices."

@@ -50,6 +50,13 @@
                                 relative-coord))))))
     connector))
 
+(cl-defmethod 2dd-set-connectee :before ((this 2dd-link-connector) value)
+  ;; If you're going to be setting the connectee to something new I'll
+  ;; need to clear out location info
+  (let ((current-connectee (oref this connectee)))
+    (unless (eq current-connectee value)
+      (oset this location nil))))
+
 (defun 2dd--link-connector-fake-point (connector fake-location)
   "Return the connection point of CONNECTOR if it had FAKE-LOCATION."
   (let ((connectee (oref connector connectee))

@@ -92,6 +92,11 @@ No checking is done before geometry is changed."
                                       (plist-get geo-plist :edit-history)))
       )))
 
+(cl-defmethod 2dd-needs-replot ((link 2dd-link))
+  "Return non-nil if LINK needs to be replotted."
+  (or (not (2dd-has-location (oref link _target-connector)))
+      (not (2dd-has-location (oref link _source-connector)))))
+
 (cl-defmethod make-instance ((class (subclass 2dd-link)) &rest slots)
   "Ensure _source and _target are not unbound."
   (let ((instance (cl-call-next-method)))
@@ -133,11 +138,13 @@ No checking is done before geometry is changed."
 (cl-defgeneric 2dd-set-target ((link 2dd-link) target-drawing)
   "Set the target of LINK to be TARGET-DRAWING.")
 (cl-defmethod 2dd-set-target ((link 2dd-link) target-drawing)
-  "Set the target of LINK to be TARGET-DRAWING."
+  "Set the target of LINK to be TARGET-DRAWING.
+
+This function may invalidate the drawing and require the link to
+be replotted."
   (unless (or (null target-drawing)
               (2dd-drawing-class-p target-drawing))
     (error "Unable to set target for a link drawing to anything other than nil or another drawing"))
-  ;; TODO - this will need to shuffle the inner path.
   (2dd-set-connectee (oref link _target-connector) target-drawing))
 (cl-defgeneric 2dd-set-inner-path ((link 2dd-link) path)
   "Set the path of LINK to PATH.")
@@ -415,7 +422,7 @@ Overridable method for ecah drawing to render itself."
                                            2dd---arrow-any
                                            edit-idx-style)))
           )))))
-(cl-defgeneric 2dd--plot-update ((link 2dd-link) (old-parent-canvas 2dd-canvas) (new-parent-canvas 2dd-canvas) child-fn)
+(cl-defgeneric 2dd--update-plot ((link 2dd-link) (old-parent-canvas 2dd-canvas) (new-parent-canvas 2dd-canvas) child-fn)
   "Update LINK based on a parent drawing or connected drawing changes.
 
 Function will return non-nil when changes are applied and nil
@@ -476,7 +483,7 @@ CHILD-FN should produce a list of all child drawings of a given
       (oset _target-connector last-point target-pt)))
   ;; cascade to children.
   (cl-loop for child in (funcall child-fn link)
-           do (2dd--plot-update child nil nil child-fn)))
+           do (2dd--update-plot child nil nil child-fn)))
 ;; (defun 2dd--link-build-edit-geometry-between (source-pt source-connected target-pt target-connected &optional source-edge target-edge)
 ;;   "Return a new link geometry based on source and target parameters.
 
@@ -940,7 +947,7 @@ Constraints: (TODO - respect containment?)
                     edit-idx
                     (1- num-edit-idxs))))
   )))
-(cl-defgeneric 2dd--set-geometry-and-plot-update ((link 2dd-link) (new-geometry list) child-fn &optional parent-canvas)
+(cl-defgeneric 2dd--set-geometry-and-update-plot ((link 2dd-link) (new-geometry list) child-fn &optional parent-canvas)
   "Update LINK to have NEW-GEOMETRY and cascade any needed updates to child drawings.
 
 NEW-GEOMETRY should be specified as a plist containing :source, :target and :inner-points keys.
@@ -954,10 +961,10 @@ passed on to any child drawings.
 Note: this function assumes that constraints are already
 validated."
     (2dd-set-geometry link new-geometry)
-    (2dd--start-plot-update (funcall child-fn link)
-                            parent-canvas
-                            parent-canvas
-                            child-fn))
+    (2dd--update-plot-all (funcall child-fn link)
+                          parent-canvas
+                          parent-canvas
+                          child-fn))
 
 (cl-defgeneric 2dd-edit-idx-points ((link 2dd-link))
   "Return an ordered list of edit-idx points for LINK."

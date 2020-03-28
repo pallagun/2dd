@@ -262,7 +262,30 @@ NEW-GEOMETRY does not have any collision if the drawing is set to
 have such a constraint.
 
 This function wil alter all child drawings of DRAWING as needed
-to maintain relative positions and enforce desired constraints.")
+to maintain relative positions and enforce desired constraints.
+
+Cycle is as follows:
+- 2dd-update-plot DRAWING
+-- validate constraints for DRAWING
+-- 2dd--set-geometry-and-update-plot DRAWING
+   ;; this should return a list of all updated elements
+   ;; I can then use that list to determine what links to update.
+   ;; right now they return true on success but that's not even used.
+   ;; so I'll just return the list of all elements updated.
+   ;; -- also, this is the one that does the returning.
+--- 2dd--update-plot-all CHILD-DRAWINGS (returns a list now)
+---- foreach CHILD-DRAWING
+----- 2dd--update-plot CHILD-DRAWING
+------ 2dd--set-geometry-and-update-plot CHILD-DRAWING
+
+TODO - I think this needs to be broken up into a non-link and
+link phase.  If the links are children of nodes they still may be
+double updated.  For now I'm going to leave this and simply
+inject any links that may need a replot into the
+2dd--update-plot-all CHILD-DRAWINGS call as if they were a child
+drawing.  This will cause links to be double-replotted for no
+reason.  For now that'll have to be how things are.")
+
 (cl-defmethod 2dd-update-plot ((drawing 2dd-drawing) new-geometry child-fn &optional parent-drawing sibling-drawings)
   "Update DRAWING to have NEW-GEOMETRY.
 
@@ -289,7 +312,7 @@ to maintain relative positions and enforce desired constraints."
                                  sibling-drawings
                                  new-geometry)
       ;; new geometry is validated - allow the update
-      (2dd--set-geometry-and-plot-update drawing
+      (2dd--set-geometry-and-update-plot drawing
                                          new-geometry
                                          child-fn
                                          (when parent-drawing

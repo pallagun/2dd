@@ -329,7 +329,7 @@ returned by a lambda."
         (funcall (plist-get relative-geo :lambda))
       relative-geo)))
 
-(cl-defmethod 2dd--plot-update ((rect 2dd-rect) (old-parent-canvas 2dd-canvas) (new-parent-canvas 2dd-canvas) child-fn)
+(cl-defmethod 2dd--update-plot ((rect 2dd-rect) (old-parent-canvas 2dd-canvas) (new-parent-canvas 2dd-canvas) child-fn)
   "Update RECT based on a parent drawing changing.
 
 Function will return non-nil when changes are applied and nil
@@ -352,27 +352,15 @@ CHILD-FN should produce a list of all child drawings of a given
                                                        (2dd-geometry child))))
          (new-absolute-coords (2dg-absolute-coordinates new-parent-canvas
                                                         relative-coord)))
-    (2dd--set-geometry-and-plot-update rect
+    (2dd--set-geometry-and-update-plot rect
                                        new-absolute-coords
                                        child-fn
-                                       new-parent-canvas)
-    ;; (let ((old-inner-canvas (2dd-get-inner-canvas rect)))
-    ;;   (2dd-set-from rect new-absolute-coords new-parent-canvas)
-    ;;   (let ((children (funcall child-fn rect))
-    ;;         (new-inner-canvas (2dd-get-inner-canvas rect))
-    ;;         (success t))
-    ;;     (cl-loop for child in children
-    ;;              do (setq success
-    ;;                       (and success
-    ;;                            (2dd--plot-update child
-    ;;                                              old-inner-canas
-    ;;                                              new-inner-canvas
-    ;;                                              child-fn)))
-    ;;              finally return success)))
-    ))
+                                       new-parent-canvas)))
 
-(cl-defmethod 2dd--set-geometry-and-plot-update ((rect 2dd-rect) (rectg 2dg-rect) child-fn &optional parent-canvas)
-  "Update RECT to have RECTG geometry, cascade child drawings as needed."
+(cl-defmethod 2dd--set-geometry-and-update-plot ((rect 2dd-rect) (rectg 2dg-rect) child-fn &optional parent-canvas)
+  "Update RECT to have RECTG geometry, cascade child drawings as needed.
+
+"
   (let ((old-inner-canvas (2dd-get-inner-canvas rect)))
     (2dd-set-from rect rectg parent-canvas)
 
