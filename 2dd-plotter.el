@@ -227,20 +227,25 @@ encounters a 2dd-link type drawing."
               ;; every child drawing exists and all of them should be
               ;; preserved.  The parent has a previous inner canvas, use
               ;; that to carry over relative layout
-              (let ((new-inner-canvas (2dd-get-inner-canvas drawing)))
-                (mapc (lambda (child)
-                        (let* ((relative-coord (2dg-relative-coordinates prev-inner-canvas
-                                                                         (2dd-geometry child)))
-                               (new-absolute-coord (2dg-absolute-coordinates new-inner-canvas
-                                                                             relative-coord)))
-                          (2dd--plot-simple-grid child
-                                                 new-absolute-coord
-                                                 child-fn
-                                                 preserve-drawing-p-fn
-                                                 settings
-                                                 t
-                                                 new-inner-canvas)))
-                      child-drawings)))))))))
+              (let ((new-inner-canvas (2dd-get-inner-canvas drawing))
+                    (is-division-rect (2dd-division-rect-class-p drawing)))
+                (cl-loop for child in child-drawings
+                         for division-idx from 0 to (1- (length child-drawings))
+                         for relative-coord = (2dg-relative-coordinates
+                                               prev-inner-canvas
+                                               (2dd-geometry child))
+                         for new-absolute-coord = (2dg-absolute-coordinates
+                                                   new-inner-canvas
+                                                   relative-coord)
+                         do (2dd--plot-simple-grid child
+                                                   (if is-division-rect
+                                                       (2dd--build-relative-division-rect-reference drawing division-idx)
+                                                     new-absolute-coord)
+                                                   child-fn
+                                                   preserve-drawing-p-fn
+                                                   settings
+                                                   t ;; TODO - URGENT - this shouldn't be a t, that's force replotting everything - that may not be needed.
+                                                   new-inner-canvas))))))))))
 
 (cl-defgeneric 2dd-update-plot ((drawing 2dd-drawing) new-geometry child-fn &optional parent-drawing sibling-drawings)
   "Update DRAWING to have NEW-GEOMETRY.

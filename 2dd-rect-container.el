@@ -7,6 +7,8 @@
 ;;
 ;; Padding is always 0.
 
+;; TODO - is this even used???
+
 ;;; Code:
 (require '2dg)
 (require '2dd-drawing)
