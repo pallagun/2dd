@@ -288,6 +288,7 @@ This will modify the LINK's inner path in place."
 If source-direction is nil it is assumed to be unconnected and
 any direction is ok.  Fi target-direction is nil it is assumed to
 be unconnected and any direction is ok."
+  (error "Delete this because it's not used???")
   (let ((min-segment-distance (or min-segment-distance
                                   1.0))
         (min-terminal-segment-distance (or min-terminal-segment-distance
@@ -313,11 +314,11 @@ be unconnected and any direction is ok."
 
 (cl-defmethod 2dd-replot-inner-path ((link 2dd-link) &optional min-segment-distance min-terminal-segment-distance)
   "Replot the inner path of this link based on the cardinal-path plotter."
-  ;; TODO - refactor this to use 2dd--link-build-replot-inner-path.
+  ;; TODO - refactor this to use 2dd--link-build-replot-inner-path. - or don't
   (let ((min-segment-distance (or min-segment-distance
                                   1.0))
         (min-terminal-segment-distance (or min-terminal-segment-distance
-                                           1.0)))
+                                           2.0)))
     (with-slots (_source-connector _target-connector) link
       (let* ((source-connected (2dd-get-connectee _source-connector))
              (target-connected (2dd-get-connectee _target-connector))
@@ -443,47 +444,77 @@ CHILD-FN should produce a list of all child drawings of a given
   ;; TODO - if one connector is connected and the other is floating,
   ;; move them both.
 
-  (with-slots (_source-connector _target-connector _inner-path) link
+  (with-slots (_source-connector _target-connector _inner-path _edit-history) link
     (let ((last-source-pt (oref _source-connector last-point))
           (source-pt (2dd-connection-point _source-connector))
           (last-target-pt (oref _target-connector last-point))
           (target-pt (2dd-connection-point _target-connector)))
-      (when (or (not (2dg-almost-equal last-source-pt source-pt))
-                (not (2dg-almost-equal last-target-pt target-pt)))
+      (let ((source-moved (not (2dg-almost-equal last-source-pt source-pt)))
+            (target-moved (not (2dg-almost-equal last-target-pt target-pt))))
+        (when (or source-moved target-moved)
+          ;; If one connector is not connected to anything, move them both.
+          (let ((source-connected (2dd-has-connection _source-connector))
+                (target-connected (2dd-has-connection _target-connector)))
+            (cond ((and source-connected (not target-connected))
+                   ;; source is connected, target is not.  force target
+                   ;; to mirror source's move.
+                   (let ((target-location
+                          (2dd--move-location _target-connector
+                                              (2dg-add last-target-pt
+                                                       (2dg-subtract source-pt
+                                                                     last-source-pt)))))
+                     (setq target-pt (plist-get target-location :absolute-coord))))
+                  ((and target-connected (not source-connected))
+                   ;; target is connected, source is not, force source
+                   ;; to mirror target's move
+                   (let ((source-location
+                          (2dd--move-location _source-connector
+                                              (2dg-add last-source-pt
+                                                       (2dg-subtract target-pt
+                                                                     last-target-pt)))))
+                     (setq source-pt (plist-get source-location :absolute-coord))))))
 
-        ;; If one connector is not connected to anything, move them both.
-        (let ((source-connected (2dd-has-connection _source-connector))
-              (target-connected (2dd-has-connection _target-connector)))
-          (cond ((and source-connected (not target-connected))
-                 ;; source is connected, target is not.  force target
-                 ;; to mirror source's move.
-                 (let ((target-location
-                        (2dd--move-location _target-connector
-                                            (2dg-add last-target-pt
-                                                     (2dg-subtract source-pt
-                                                                   last-source-pt)))))
-                   (setq target-pt (plist-get target-location :absolute-coord))))
-                ((and target-connected (not source-connected))
-                 ;; target is connected, source is not, force source
-                 ;; to mirror target's move
-                 (let ((source-location
-                        (2dd--move-location _source-connector
-                                            (2dg-add last-source-pt
-                                                     (2dg-subtract target-pt
-                                                                   last-target-pt)))))
-                   (setq source-pt (plist-get source-location :absolute-coord))))))
-
-        (let* ((last-full-pts (append (cons last-source-pt
-                                            (2dg-points _inner-path))
-                                      (list last-target-pt)))
-               (new-full-pts (2dg-stretch last-full-pts source-pt target-pt))
-               (new-inner-pts (2dg--path-list-truncate new-full-pts 1 1)))
-          (2dd-set-inner-path link (2dg-cardinal-path :points new-inner-pts))))
-      (oset _source-connector last-point source-pt)
-      (oset _target-connector last-point target-pt)))
+          (oset _source-connector last-point source-pt)
+          (oset _target-connector last-point target-pt)
+          ;; Choose how to manipulate the path
+          (cond
+           ((not (memq 'inner-path _edit-history))
+            ;; If the inner path geometry isn't set, just autoplot again.
+            (2dd-replot-inner-path link))
+           ((and source-moved (not target-moved))
+            ;; Just the source moved, use nudging to correct this.
+            (let* ((current-pts (append (list last-source-pt)
+                                        (2dg-points _inner-path)
+                                        (list last-target-pt)))
+                   (new-path (2dg-nudge-path current-pts
+                                             0
+                                             (2dg-subtract source-pt last-source-pt)))
+                   (new-inner-pts (2dg--path-list-truncate new-path 1 1)))
+              (2dd-set-inner-path link new-inner-pts)))
+           ((and target-moved (not source-moved))
+            ;; Just the target moved, use nudging to correct this.
+            ;; Just the source moved, use nudging to correct this.
+            (let* ((current-pts (append (list last-source-pt)
+                                        (2dg-points _inner-path)
+                                        (list last-target-pt)))
+                   (new-path (2dg-nudge-path current-pts
+                                             (1- (length current-pts))
+                                             (2dg-subtract target-pt last-target-pt)))
+                   (new-inner-pts (2dg--path-list-truncate new-path 1 1)))
+              (2dd-set-inner-path link new-inner-pts)))
+           (t
+            ;; Default case, use stretch
+            (let* ((last-full-pts (append (cons last-source-pt
+                                                (2dg-points _inner-path))
+                                          (list last-target-pt)))
+                   (new-full-pts (2dg-stretch last-full-pts source-pt target-pt))
+                   (new-inner-pts (2dg--path-list-truncate new-full-pts 1 1)))
+              (2dd-set-inner-path link (2dg-cardinal-path :points new-inner-pts)))))))))
   ;; cascade to children.
+  ;; TODO - this should call update-plot-all????
   (cl-loop for child in (funcall child-fn link)
-           do (2dd--update-plot child nil nil child-fn)))
+           do (2dd--update-plot child nil nil child-fn))
+  t)
 ;; (defun 2dd--link-build-edit-geometry-between (source-pt source-connected target-pt target-connected &optional source-edge target-edge)
 ;;   "Return a new link geometry based on source and target parameters.
 
@@ -846,7 +877,7 @@ Constraints: (TODO - respect containment?)
                                                                        0.5
                                                                        nil
                                                                        1.0)))
-                         (if 2rd-to-last-point
+                         (if 2nd-to-last-point
                              ;; There was another point, this
                              ;; operation may have introduced a
                              ;; redundant edit idx.  Smooth the path
