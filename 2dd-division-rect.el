@@ -525,15 +525,23 @@ updated."
     (let ((children (funcall child-fn rect))
           (divisions (2dd-get-divisions-absolute rect))
           (new-inner-canvas (2dd-get-inner-canvas rect))
-          (success t))
-      (cl-loop for child in children
+          (plot-phase (2dd--plot-phase rect)))
+      (cl-loop with out-of-phase = nil
+               for child in children
                for division in divisions
-               do (setq success
-                        (and success
-                             (2dd--set-geometry-and-update-plot child
+               for child-phase = (2dd--plot-phase child)
+               if (eq plot-phase child-phase)
+               do (setq out-of-phase
+                        (nconc (2dd--set-geometry-and-update-plot child
                                                                 division
-                                                                child-fn)))
-               finally return success))))
+                                                                child-fn)
+                               out-of-phase))
+               else
+               do (push (list :old-canvas nil
+                              :new-canvas division
+                              :drawing child)
+                        out-of-phase)
+               finally return out-of-phase))))
 
 (provide '2dd-division-rect)
 ;;; 2dd-division-rect.el ends here
