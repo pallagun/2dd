@@ -316,12 +316,46 @@ to maintain relative positions and enforce desired constraints."
                                  parent-drawing
                                  sibling-drawings
                                  new-geometry)
-      ;; new geometry is validated - allow the update
-      (2dd--set-geometry-and-update-plot drawing
-                                         new-geometry
-                                         child-fn
-                                         (when parent-drawing
-                                           (2dd-get-inner-canvas parent-drawing)))))
+      ;; Here we begin plotting drawings of oscillating phases.  First
+      ;; phase is the phase of the current drawing.
+      (let ((next-phase-requests
+             (2dd--set-geometry-and-update-plot drawing
+                                                new-geometry
+                                                child-fn
+                                                (when parent-drawing
+                                                  (2dd-get-inner-canvas parent-drawing)))))
+        (while next-phase-requests
+          ;; sort out the next plot-requests by their target drawing.
+          (let ((requests-by-drawing))
+            (cl-loop for plot-request in next-phase-requests
+                     for drawing = (plist-get plot-request :drawing)
+                     do (push plot-request
+                              (alist-get drawing requests-by-drawing)))
+            (setq next-phase-requests nil)
+            (cl-loop for request in requests-by-drawing
+                     for drawing = (car request)
+                     for old-parent-canvases = (mapcar
+                                                (lambda (req-canvases)
+                                                  (plist-get req-canvases :old-canvas))
+                                                (cdr request))
+                     for new-parent-canvases = (mapcar
+                                                (lambda (req-canvases)
+                                                  (plist-get req-canvases :new-canvas))
+                                                (cdr request))
+                     ;; For now, just use the first one.
+                     for output = (2dd--update-plot drawing
+                                                    (first old-parent-canvases)
+                                                    (first new-parent-canvases)
+                                                    child-fn)
+                     when output
+                     do (push output next-phase-requests))
+                                ;; (nconc (2dd--update-plot child
+                                ;;              old-inner-canvas
+                                ;;              new-inner-canvas
+                                ;;              child-fn)
+            ;; if there are two requests I'm going to pick one canvas at random to pass to the child plot request.
+            ;; requests-by-drawing
+          )))))
 
 (cl-defgeneric 2dd-validate-constraints ((drawing 2dd-drawing) (parent 2dd-drawing) (siblings list))
   "Validate that DRAWING satisfies all constrants relative to PARENT and SIBLINGS.

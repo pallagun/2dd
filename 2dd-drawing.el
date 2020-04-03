@@ -47,6 +47,16 @@ constraints at the same time.")
 (defsubst 2dd-drawing-class-p (any)
   "Same as (object-of-class-p ANY '2dd-drawing)."
   (object-of-class-p any '2dd-drawing))
+(cl-defgeneric 2dd--plot-phase ((drawing 2dd-drawing))
+  "Return the plot phase of this drawing as a symbol.
+
+Plot phase is one of 'node or 'link.")
+(cl-defmethod 2dd--plot-phase ((drawing 2dd-drawing))
+  "Return the plot phase of this drawing as a symbol.
+
+Plot phase is one of 'node or 'link."
+  'node)
+
 (cl-defmethod 2dd-set-constraint :before ((this 2dd-drawing) value)
   "Set the constraint flag for THIS to VALUE after validation."
   (unless (memq value 2dd-valid-constraints)
@@ -108,8 +118,8 @@ When PARENT-CANVAS is suppled and the drawing is capable of holding relative coo
 (cl-defgeneric 2dd--update-plot ((drawing 2dd-drawing) (old-parent-canvas 2dd-canvas) (new-parent-canvas 2dd-canvas) child-fn)
   "Update DRAWING based on a parent drawing changing.
 
-Function will return non-nil when changes are applied and nil
-otherwise.
+Function will return a list of all drawing descriptions.  They
+describe drawings which should be updated but were not.
 
 This function should be used when the parent of DRAWING has been
 changed and DRAWING must be updated to accomodate this.
@@ -127,6 +137,9 @@ CHILD-FN should produce a list of all child drawings of a given
 (cl-defgeneric 2dd--set-geometry-and-update-plot ((drawing 2dd-drawing) new-geometry child-fn &optional parent-canvas)
   "Update DRAWING to have NEW-GEOMETRY and cascade any needed updates to child drawings.
 
+Function will return a list of all drawing descriptions.  They
+describe drawings which should be updated but were not.
+
 NEW-GEOMETRY should be specified in absolute coordinates.
 
 CHILD-FN should produce a list of all child drawings of a given
@@ -139,19 +152,32 @@ Note: this function assumes that constraints are already
 validated."
   (error "Unable to 2dd--set-geometry-and-update-plot for drawing of type: %s"
          (eieio-object-class-name drawing)))
-(defun 2dd--update-plot-all (children old-inner-canvas new-inner-canvas child-fn)
-  "Call 2dd--update-plot on all CHILDREN.
-
-"
-  (cl-loop with success = t
+(defun 2dd--update-plot-all (plot-phase children old-inner-canvas new-inner-canvas child-fn)
+  "Call 2dd--update-plot on all CHILDREN."
+  (cl-loop with out-of-phase = nil
            for child in children
-           do (setq success
-                    (and success
-                         (2dd--update-plot child
-                                           old-inner-canvas
-                                           new-inner-canvas
-                                           child-fn)))
-           finally return success))
+           for child-phase = (2dd--plot-phase child)
+           if (eq plot-phase child-phase)
+           do (setq out-of-phase
+                    (nconc (2dd--update-plot child
+                                             old-inner-canvas
+                                             new-inner-canvas
+                                             child-fn)
+                           out-of-phase))
+           else
+           do (push (list :old-canvas old-inner-canvas
+                          :new-canvas new-inner-canvas
+                          :drawing child)
+                    out-of-phase)
+           finally return out-of-phase))
+
+           ;; do (setq success
+           ;;          (and success
+           ;;               (2dd--update-plot child
+           ;;                                 old-inner-canvas
+           ;;                                 new-inner-canvas
+           ;;                                 child-fn)))
+           ;; finally return success))
 
 (cl-defmethod 2dd-num-edit-idxs ((drawing 2dd-drawing))
   "Non-editable drawings always have zero edit indices."

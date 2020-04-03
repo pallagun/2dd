@@ -368,7 +368,8 @@ CHILD-FN should produce a list of all child drawings of a given
   (let ((old-inner-canvas (2dd-get-inner-canvas rect)))
     (2dd-set-from rect rectg parent-canvas)
 
-    (2dd--update-plot-all (funcall child-fn rect)
+    (2dd--update-plot-all (2dd--plot-phase rect)
+                          (funcall child-fn rect)
                           old-inner-canvas
                           (2dd-get-inner-canvas rect)
                           child-fn)))
