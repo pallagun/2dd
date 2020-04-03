@@ -2,6 +2,8 @@
 
 ;;; Commentary:
 
+;; TODO - replace all calls to 2dg-truncate with calls to 2dg--path-pts-truncate-1 where applicable!
+
 ;;; Code:
 (require '2dg)
 (require '2dd-viewport)
@@ -158,12 +160,19 @@ be replotted."
   (2dd-set-inner-path link (2dg-cardinal-path :points inner-pts)))
 (cl-defmethod 2dd-set-inner-path ((link 2dd-link) (inner-path 2dg-cardinal-path))
   "Set LINK's inner path to be INNER-PATH."
-  (let ((source-pt (2dd-connection-point (oref link _source-connector))))
-    (unless (2dg-cardinal-displacement-p source-pt (2dg-start inner-path))
-      (error "Inner path must have a cardinal displacement to the source connector")))
-  (let ((target-pt (2dd-connection-point (oref link _target-connector))))
-    (unless (2dg-cardinal-displacement-p target-pt (2dg-end inner-path))
-      (error "Inner path must have a cardinal displacement to the target connector")))
+  (let ((source-pt (2dd-connection-point (oref link _source-connector)))
+        (target-pt (2dd-connection-point (oref link _target-connector))))
+    (if (= (2dg-num-points inner-path) 0)
+        ;; no path, validate that the source and target are cardinal appropriate.
+        (unless (2dg-cardinal-displacement-p source-pt target-pt)
+          (error "Inner path must establish a cardinal path between source and target points"))
+      ;; Has an inner path, ensure it will be a fully cardinal path
+      ;; when connected to the source and target points.
+      (unless (2dg-cardinal-displacement-p source-pt (2dg-start inner-path))
+        (error "Inner path must have a cardinal displacement to the source connector"))
+      (unless (2dg-cardinal-displacement-p target-pt (2dg-end inner-path))
+        (error "Inner path must have a cardinal displacement to the target connector"))))
+
   (oset link _inner-path inner-path))
 (cl-defgeneric 2dd-clear-inner-path ((link 2dd-link))
   "Set the inner path of LINK to be nil."
@@ -713,89 +722,6 @@ Constraints: (TODO - respect containment?)
          (edit-history (oref link _edit-history)))
 
     (block build-geometry
-      ;; move some part of the inner-path
-      ;; cases:
-      ;; - no change is needed to a terminal point.
-      ;; -- Just tack them back on and you've changed your inner path.
-      ;; - a terminal point has moved.
-      ;; -- The terminal point is locked.
-      ;; --- Reject the build request.
-      ;; -- The terminal point is unlocked.
-      ;; --- do literally anything, who cares.
-      ;; --- (for now, just build a cardinal path between them.)
-      ;; (when is-start-idx
-      ;;   ;; the starting point was moved, this may not be possible but
-      ;;   ;; start points are allowed to move as close as they can even
-      ;;   ;; if they can't move to the exact requested location.
-      ;;   (setq new-source-location (2dd--move-location (oref link _source-connector)
-      ;;                                                 (2dg-add current-start move-vector)
-      ;;                                                 t
-      ;;                                                 t))
-      ;;   (if new-source-location
-      ;;       ;; Able to get a new source location, adapt move vector to
-      ;;       ;; match it as it may not.
-      ;;       (let ((new-start (plist-get new-source-location :absolute-coord)))
-      ;;         (setq move-vector (2dg-subtract new-start current-start)))
-      ;;     ;; Unable to get a decent source location, abort.
-      ;;     (return-from build-geometry nil)))
-      ;; (when is-end-idx
-      ;;   (setq new-target-location (2dd--move-location (oref link _target-connector)
-      ;;                                                 (2dg-add current-end move-vector)
-      ;;                                                 t
-      ;;                                                 t))
-      ;;   (if new-target-location
-      ;;       ;; Able to get a new source location, adapt move vector to
-      ;;       ;; match it as it may not.
-      ;;       (let ((new-end (plist-get new-target-location :absolute-coord)))
-      ;;         (setq move-vector (2dg-subtract new-send current-end)))
-      ;;     ;; Unable to get a decent source location, abort.
-      ;;     (return-from build-geometry nil)))
-
-
-      ;; (let* ((nudged-pts (2dg-nudge-path current-pts edit-idx move-vector))
-      ;;        (nudged-start (first nudged-pts))
-      ;;        (nudged-end (car (last nudged-pts)))
-      ;;        (source-location (2dd-serialize-geometry
-      ;;                          (oref link _source-connector)))
-      ;;        (target-location (2dd-serialize-geometry
-      ;;                          (oref link _target-connector))))
-      ;;   (unless (2dg-almost-equal nudged-start current-start)
-      ;;     ;; The start point has moved, if it's unconnected
-      ;;     ;; that's fine.  If it's connected it may only move
-      ;;     ;; along the same edge, no edge changes are allowed.
-      ;;     (let* ((new-source-location (2dd--move-location
-      ;;                                  (oref link _source-connector)
-      ;;                                  nudged-start))
-      ;;            (source-edge (2dd--link-connector-location-edge
-      ;;                          source-location))
-      ;;            (new-source-edge (2dd--link-connector-location-edge
-      ;;                              new-source-location)))
-
-      ;;       (when (and (not (eq source-edge new-source-edge))
-      ;;                  (not is-start-idx))
-      ;;         ;; Edges may not change when editing an inner-point
-      ;;         (return-from build-geometry nil))
-      ;;       ;; move is ok
-      ;;       (setq source-location new-source-location)))
-      ;;   (unless (2dg-almost-equal nudged-end current-end)
-      ;;     ;; The end point has moved, do something aboeut that.
-      ;;     (let* ((new-target-location (2dd--move-location
-      ;;                                  (oref link _target-connector)
-      ;;                                  nudged-end))
-      ;;            (target-edge (2dd--link-connector-location-edge
-      ;;                          target-location))
-      ;;            (new-target-edge (2dd--link-connector-location-edge
-      ;;                              new-target-location)))
-
-      ;;       (when (and (not (eq target-edge new-target-edge))
-      ;;                  (not is-end-idx))
-      ;;         ;; Edges may not change when editing an inner-point
-      ;;         (return-from build-geometry nil))
-      ;;       ;; move is ok
-      ;;       (setq target-location new-target-location)))
-      ;;   (list :source source-location
-      ;;         :inner-points (2dg-truncate nudged-pts 1 1)
-      ;;         :target target-location))
       (cond ((eq edit-idx 0)
              ;; Move the source connector
              (let* ((source-connector (oref link _source-connector))
@@ -840,145 +766,6 @@ Constraints: (TODO - respect containment?)
                                                move-vector)
                                 :target (2dd-serialize-geometry
                                          (oref link _target-connector) t)))))))))
-
-            ;;          ;; the edges *have* changed
-                 ;;          (let* ((next-point (second current-pts))
-                 ;;                 (min-segment-distance 1.0) ;for now.
-                 ;;                 (next-next-point (third current-pts))
-                 ;;                 (next-next-point-is-terminal (eq 3
-                 ;;                                                  (length current-pts)))
-                 ;;                 (next-dir (if next-next-point
-                 ;;                               (2dg-subtract next-next-point next-point)
-                 ;;                             (2dg-subtract next-point current-start)))
-                 ;;                 (new-path-piece (2dg-build-path-cardinal new-start
-                 ;;                                                          next-point
-                 ;;                                                          (2dg-vector-from-direction new-edge)
-                 ;;                                                          next-dir
-                 ;;                                                          0.5
-                 ;;                                                          min-perpendicular-distance
-                 ;;                                                          nil)))
-                 ;;            (if next-next-point
-                 ;;                ;; There was another point, this
-                 ;;                ;; operation may have introduced a
-                 ;;                ;; redundant edit idx or otherwise done
-                 ;;                ;; weird things to the path, simplify the
-                 ;;                ;; newly created area
-                 ;;                (let* ((new-pts (2dg-points new-path-piece))
-                 ;;                       ;; (new-starting-pt (seq-take new-pts 2))
-                 ;;                       (new-questionable-pts (append (cdr new-pts)
-                 ;;                                                     (list next-next-point)))
-                 ;;                       (slack (+ (2dg-box-magnitude move-vector)
-                 ;;                                 min-perpendicular-distance))
-                 ;;                       (simplified (2dg-simplified
-                 ;;                                    (2dg-slack-simplified new-questionable-pts
-                 ;;                                                          slack
-                 ;;                                                          slack)))
-                 ;;                       ;; (larger-new-piece (2dg-simplified (2dg-points new-path-piece)
-                 ;;                       ;;                                   (list next-next-point)))
-                 ;;                       (new-inner-points (append simplified
-                 ;;                                                 (nthcdr 3 current-pts)))
-                 ;;                       )
-                 ;;                  (2dd--build-link-set-unconnected-edges
-                 ;;                   (list :edit-history (union '(source) edit-history)
-                 ;;                         :source new-source-location
-                 ;;                         :inner-points (if next-next-point-is-terminal
-                 ;;                                           (nbutlast new-inner-points)
-                 ;;                                         new-inner-points);; (append simplified
-                 ;;                         ;; (nthcdr 3 current-pts))
-                 ;;                         ;; :inner-points (append (cdr larger-new-piece)
-                 ;;                         ;;                       (nthcdr 3 current-pts))
-                 ;;                         :target (2dd-serialize-geometry
-                 ;;                                  (oref link _target-connector)))))
-                 ;;              ;; there was no next-next point so use what you have.
-                 ;;              (2dd--build-link-set-unconnected-edges
-                 ;;               (list :edit-history (union '(source) edit-history)
-                 ;;                     :source new-source-location
-                 ;;                     :inner-points (append (cdr (2dg-points new-path-piece))
-                 ;;                                           (nthcdr 2 current-pts))
-                 ;;                     :target (2dd-serialize-geometry
-                 ;;                              (oref link _target-connector))))))
-
-
-                 ;; ;; Otherwise, go.
-                 ;; (let ((new-edge (plist-get new-source-location :edge))
-                 ;;       (old-edge (2dd-from-connectee-direction source-connector))
-            ;;       (new-start (plist-get new-source-location :absolute-coord)))
-                 ;;   (if (not (eq old-edge new-edge))
-                 ;;       ;; edges have changed, insert a path segment to
-                 ;;       ;; handle that.  I'm just going to create a new path
-                 ;;       ;; and stitch it in.
-                 ;;       (let* ((next-point (second current-pts))
-                 ;;              (min-segment-distance 1.0) ;for now.
-                 ;;              (next-next-point (third current-pts))
-                 ;;              (next-next-point-is-terminal (eq 3
-                 ;;                                               (length current-pts)))
-                 ;;              (next-dir (if next-next-point
-                 ;;                            (2dg-subtract next-next-point next-point)
-                 ;;                          (2dg-subtract next-point current-start)))
-                 ;;              (new-path-piece (2dg-build-path-cardinal new-start
-                 ;;                                                       next-point
-                 ;;                                                       (2dg-vector-from-direction new-edge)
-                 ;;                                                       next-dir
-                 ;;                                                       0.5
-                 ;;                                                       min-perpendicular-distance
-                 ;;                                                       nil)))
-                 ;;         (if next-next-point
-                 ;;             ;; There was another point, this
-                 ;;             ;; operation may have introduced a
-                 ;;             ;; redundant edit idx or otherwise done
-                 ;;             ;; weird things to the path, simplify the
-                 ;;             ;; newly created area
-                 ;;             (let* ((new-pts (2dg-points new-path-piece))
-                 ;;                     ;; (new-starting-pt (seq-take new-pts 2))
-                 ;;                    (new-questionable-pts (append (cdr new-pts)
-                 ;;                                                  (list next-next-point)))
-                 ;;                    (slack (+ (2dg-box-magnitude move-vector)
-                 ;;                              min-perpendicular-distance))
-                 ;;                    (simplified (2dg-simplified
-                 ;;                                 (2dg-slack-simplified new-questionable-pts
-                 ;;                                                       slack
-                 ;;                                                       slack)))
-                 ;;                    ;; (larger-new-piece (2dg-simplified (2dg-points new-path-piece)
-                 ;;                    ;;                                   (list next-next-point)))
-                 ;;                    (new-inner-points (append simplified
-                 ;;                                              (nthcdr 3 current-pts)))
-                 ;;                    )
-                 ;;               (2dd--build-link-set-unconnected-edges
-                 ;;                (list :edit-history (union '(source) edit-history)
-                 ;;                      :source new-source-location
-                 ;;                      :inner-points (if next-next-point-is-terminal
-                 ;;                                        (nbutlast new-inner-points)
-                 ;;                                      new-inner-points);; (append simplified
-                 ;;                      ;; (nthcdr 3 current-pts))
-                 ;;                      ;; :inner-points (append (cdr larger-new-piece)
-                 ;;                      ;;                       (nthcdr 3 current-pts))
-                 ;;                      :target (2dd-serialize-geometry
-                 ;;                               (oref link _target-connector)))))
-                 ;;           ;; there was no next-next point so use what you have.
-                 ;;           (2dd--build-link-set-unconnected-edges
-                 ;;            (list :edit-history (union '(source) edit-history)
-                 ;;                  :source new-source-location
-                 ;;                  :inner-points (append (cdr (2dg-points new-path-piece))
-                 ;;                                        (nthcdr 2 current-pts))
-                 ;;                  :target (2dd-serialize-geometry
-                 ;;                           (oref link _target-connector))))))
-                 ;;     ;; Edges did not change, this is a normal path
-                 ;;     ;; change where no additional points will be
-                 ;;     ;; added/removed and no path construction is
-                 ;;     ;; needed.
-                 ;;     (let* (;; (bad-new-path (2dg-stretch current-pts
-                 ;;            ;;                            new-start)
-                 ;;            ;;                            current-end))
-                 ;;            (new-path (2dg-nudge-path current-pts
-                 ;;                                      0
-                 ;;                                      (2dg-subtract new-start current-start)))
-                 ;;            (new-inner-pts (2dg--path-list-truncate new-path 1 1)))
-                 ;;       (2dd--build-link-set-unconnected-edges
-                 ;;        (list :edit-history (union '(source) edit-history)
-                 ;;              :source new-source-location
-                 ;;              :inner-points new-inner-pts
-                 ;;              :target (2dd-serialize-geometry
-            ;;                       (oref link _target-connector)))))))))))
 
             ((eq edit-idx (1- num-edit-idxs))
              ;; move the target connector
@@ -1025,69 +812,6 @@ Constraints: (TODO - respect containment?)
                                                 new-edge
                                                 move-vector))
                                 :target new-target-location))))))))
-
-                 ;; ;; Else, do whatever was going to happen.
-                 ;; (let ((new-edge (plist-get new-target-location :edge))
-                 ;;       (new-end (plist-get new-target-location :absolute-coord)))
-                 ;;   (if (not (eq (2dd-from-connectee-direction target-connector)
-                 ;;                new-edge))
-                 ;;       ;; edges have changed, insert a path segment to
-                 ;;       ;; handle that.  I'm just going to create a new path
-                 ;;       ;; and stitch it in.
-                 ;;       (let* ((2nd-to-last-point (car (last current-pts 2)))
-                 ;;              (min-segment-distance 1.0) ;for now.
-                 ;;              (3rd-to-last-point (if (> (length current-pts) 2)
-                 ;;                                     (car (last current-pts 3))
-                 ;;                                   nil))
-                 ;;              (resume-dir (if 3rd-to-last-point
-                 ;;                            (2dg-subtract 3rd-to-last-point 2nd-to-last-point)
-                 ;;                          (2dg-subtract 2nd-to-last-point current-end)))
-                 ;;              (new-path-piece (2dg-build-path-cardinal 2nd-to-last-point
-                 ;;                                                       new-end
-                 ;;                                                       resume-dir
-                 ;;                                                       (2dg-vector-from-direction (2dg-reverse new-edge))
-                 ;;                                                       0.5
-                 ;;                                                       nil
-                 ;;                                                       1.0)))
-                 ;;         (if 2nd-to-last-point
-                 ;;             ;; There was another point, this
-                 ;;             ;; operation may have introduced a
-                 ;;             ;; redundant edit idx.  Smooth the path
-                 ;;             ;; to remove it.
-                 ;;             (let ((larger-new-piece (2dg-simplified (2dg-points new-path-piece)
-                 ;;                                                     (list next-next-point))))
-                 ;;               (2dd--build-link-set-unconnected-edges
-                 ;;                (list :edit-history (union '(target) edit-history)
-                 ;;                      :source new-source-location
-                 ;;                      :inner-points (append (butlast current-pts 3)
-                 ;;                                            (nthcdr 2 (2dg-points new-path-piece)))
-                 ;;                      :target (2dd-serialize-geometry
-                 ;;                               (oref link _target-connector)))))
-                 ;;               ;; there was no next-next point so use what you have.
-                 ;;           (2dd--build-link-set-unconnected-edges
-                 ;;            (list :edit-history (union '(target) edit-history)
-                 ;;                  :source (2dd-serialize-geometry
-                 ;;                           (oref link _target-connector))
-                 ;;                  :inner-points (append (butlast current-pts 2)
-                 ;;                                        (cdr (2dg-points new-path-piece)))
-                 ;;                  :target new-target-location))))
-                 ;;     ;; Edges did not change, this is a normal path
-                 ;;     ;; change where no additional points will be
-                 ;;     ;; added/removed and no path construction is
-                 ;;     ;; needed.
-                 ;;     (let* (;; (bad-new-path (2dg-stretch current-pts
-                 ;;            ;;                            new-start)
-                 ;;            ;;                            current-end))
-                 ;;            (new-path (2dg-nudge-path current-pts
-                 ;;                                      (1- num-edit-idxs)
-                 ;;                                      (2dg-subtract new-end current-end)))
-                 ;;            (new-inner-pts (2dg--path-list-truncate new-path 1 1)))
-                 ;;       (2dd--build-link-set-unconnected-edges
-                 ;;        (list :edit-history (union '(target) edit-history)
-                 ;;              :source (2dd-serialize-geometry
-                 ;;                       (oref link _source-connector) t)
-                 ;;              :inner-points new-inner-pts
-                 ;;              :target new-target-location)))))))))
             ((and (< 0 edit-idx) (< edit-idx num-edit-idxs))
              ;; move some part of the inner-path
              ;; cases:
@@ -1149,7 +873,43 @@ Constraints: (TODO - respect containment?)
              (error "2dd-build-idx-edited-geometry: invalid edit idx: %s must be in [0, %d]"
                     edit-idx
                     (1- num-edit-idxs))))
-  )))
+      )))
+(cl-defgeneric 2dd-build-move-edited-geometry ((link 2dd-link) (move-vector 2dg-point))
+  "Return new geometry based off moving LINK by MOVE-VECTOR.
+
+In the event that it's not possible to move DRAWING, return nil.
+
+Nothing should be mutated."
+  (let ((current-pts (2dd-edit-idx-points link))
+        (source-connector (oref link _source-connector))
+        (target-connector (oref link _target-connector)))
+    (let* ((current-start (first current-pts))
+           (current-end (car (last current-pts)))
+           (new-source-location (2dd--move-location source-connector
+                                                    (2dg-add current-start
+                                                             move-vector)
+                                                    t
+                                                    nil))
+           (new-target-location (2dd--move-location target-connector
+                                                    (2dg-add current-end
+                                                             move-vector)
+                                                    t
+                                                    nil)))
+      (if (and new-source-location
+               new-target-location
+               (eq (2dd-from-connectee-direction source-connector) ;old source edge
+                   (plist-get new-source-location :edge))          ;new source edge
+               (eq (2dd-from-connectee-direction target-connector) ;old target edge
+                   (plist-get new-target-location :edge)))         ;new target edge
+          ;; new locations have been found and no edges have changed,
+          ;; this is an allowable move.
+          (list :edit-history (union '(source target) (oref link _edit-history))
+                :source new-source-location
+                :inner-points (mapcar (lambda (pt) (2dg-add pt move-vector))
+                                      (2dg--path-pts-truncate-1 current-pts))
+                :target new-target-location)
+        nil))))
+
 (cl-defgeneric 2dd--set-geometry-and-update-plot ((link 2dd-link) (new-geometry list) child-fn &optional parent-canvas)
   "Update LINK to have NEW-GEOMETRY and cascade any needed updates to child drawings.
 
