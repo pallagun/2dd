@@ -171,14 +171,6 @@ validated."
                     out-of-phase)
            finally return out-of-phase))
 
-           ;; do (setq success
-           ;;          (and success
-           ;;               (2dd--update-plot child
-           ;;                                 old-inner-canvas
-           ;;                                 new-inner-canvas
-           ;;                                 child-fn)))
-           ;; finally return success))
-
 (cl-defmethod 2dd-num-edit-idxs ((drawing 2dd-drawing))
   "Non-editable drawings always have zero edit indices."
   0)

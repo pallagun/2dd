@@ -100,24 +100,64 @@ Start searching at START-DRAWING.  When nothing is found return nil"
                      finally return nil))
     nil))
 
-(cl-defgeneric 2dd-render-all ((diagram 2dd-diagram) child-fn)
+(cl-defgeneric 2dd-render-all ((diagram 2dd-diagram) child-fn &optional draw-last-fn)
   "Render DIAGRAM to a string.
 
 CHILD-FN should provide child drawings when called with a parent
 drawing.")
-(cl-defmethod 2dd-render-all ((diagram 2dd-diagram) child-fn)
-  "Render this DIAGRAM to a string."
+(cl-defmethod 2dd-render-all ((diagram 2dd-diagram) child-fn &optional draw-last-fn)
+  "Render this DIAGRAM to a string and write it out to the current buffer.
+
+CHILD-FN should return a list of children for a given drawing
+when called as (funcall CHILD-FN DRAWING).
+
+DRAW-LAST-FN (when present) will be used to determine which
+drawings to render last.  The purpose of this function is to
+allow callers to have a bit of control over the rendering order
+of drawings.  Typically all child drawings are rendered over
+parent drawings and no promise is made as to the rendering order
+of sibling drawings.  This may cause issues when a sibling
+drawings obscures another at an incorrect time.  When (funcall
+DRAW-LAST-FN drawing) returns non-nil that drawing(s) will be
+rendered last.  One possible usage would be to ensure that the
+currently focused drawing is rendered last such that sibling
+drawings do not obscure it (i.e. ensuring a 'selected' drawing is
+rendered 'on top')."
   (with-slots (_root _viewport _canvas) diagram
     (let ((scratch (2dd--get-scratch _viewport))
           (transformers (2dd-get-scratch-int-transformers _viewport)))
-      (2dd---render-worker scratch
-                           _root
-                           _canvas
-                           _viewport
-                           child-fn
-                           (car transformers)
-                           (cdr transformers))
+      (let ((x-transformer (car transformers))
+            (y-transformer (cdr transformers)))
+        (if draw-last-fn
+            ;; Enable last-drawing behavior
+            (cl-loop with draw-last-list = nil
+                     for drawing in (2dd--diagram-tree-to-list _root child-fn)
+                     if (funcall draw-last-fn drawing)
+                       do (push drawing draw-last-list)
+                     else
+                       do (2dd-render drawing scratch x-transformer y-transformer _viewport)
+                     finally do
+                       (mapc (lambda (last-drawing)
+                               (2dd-render last-drawing scratch x-transformer y-transformer _viewport))
+                             draw-last-list))
+          ;; Use normal depth first graph traversal drawing order.
+          (2dd---render-worker scratch
+                               _root
+                               _canvas
+                               _viewport
+                               child-fn
+                               x-transformer
+                               y-transformer)))
       (2dd--scratch-write scratch))))
+(defun 2dd--diagram-tree-to-list (root-node child-fn)
+  "Given a ROOT-NODE and CHILD-FN, return an ordered list nodes of depth first traversal of the graph."
+  (let ((children (funcall child-fn root-node)))
+    (if children
+        (cons root-node
+              (apply 'nconc (mapcar (lambda (child)
+                                      (2dd--diagram-tree-to-list child child-fn))
+                                    children)))
+      (list root-node))))
 (defun 2dd---render-worker (scratch drawing canvas viewport child-fn x-transformer y-transformer)
   "Draw everything recursively."
   (2dd-render drawing scratch x-transformer y-transformer viewport)
