@@ -123,6 +123,10 @@ rendered last.  One possible usage would be to ensure that the
 currently focused drawing is rendered last such that sibling
 drawings do not obscure it (i.e. ensuring a 'selected' drawing is
 rendered 'on top')."
+  ;; TODO - because I'm not stopping any drawing from having two
+  ;; parent's it's possible that one drawing is being rendered twice -
+  ;; put in protections to stop that from happening if it's going to
+  ;; be efficient.
   (with-slots (_root _viewport _canvas) diagram
     (let ((scratch (2dd--get-scratch _viewport))
           (transformers (2dd-get-scratch-int-transformers _viewport)))
