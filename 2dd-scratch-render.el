@@ -70,10 +70,23 @@
                   (2dd---scratch-set scratch x y char style)))
               (incf x-pos))
             string))))
+(defsubst 2dd---scratch-safe-set-keep-style (scratch x y char)
+  "Set scratch-pixel in SCRATCH at X Y to be CHAR.
+
+The 'safe' in the function name indicates that X/Y are checked
+before use."
+  (when (and (< -1 x (2dd---scratch-size-x scratch))
+             (< -1 y (2dd---scratch-size-y scratch)))
+    (let ((current (elt (elt scratch y) x)))
+      (if (consp current)
+          (setcar (elt (elt scratch y) x) char)
+        (setf (elt (elt scratch y) x)
+              (cons char nil))))))
 (defsubst 2dd---scratch-set (scratch x y char &optional style)
   "Set scratch-pixel in SCRATCH at X Y to be CHAR optionally with STYLE."
   ;; note: previously these checks weren't in place.  I'm not sure if
   ;; they should remain in place or not.  For now they are required.
+  ;; TODO - split this into a checked and unchecked version.
   (when (and (< -1 x (2dd---scratch-size-x scratch))
              (< -1 y (2dd---scratch-size-y scratch)))
     (setf (elt (elt scratch y) x)

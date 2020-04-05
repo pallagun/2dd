@@ -378,9 +378,22 @@ style information for the drawing.  Accepted plist keys are:
 :connector-offset (a 2dg-point describing connector arrow head offsets)
 :outline-style (defaults to no style)
 :edit-idx-style (defaults to no style)
+:link-start (when present, what to draw at the start of the link segments, currently not implemented)
+:link-end (when present, what to draw at the end of the link segments, currently only accepts nil or 'arrow)
+:link-source (when present, what to draw at the source of the link IF it is connected, currently only accepts nil or 'circle)
+:link-target (when present, what to draw at the target of the link IF it is connected, currently only accepts nil or 'circle)
+
+Note: end/target and start/source are different points.  The
+target and source points are the exact positions that the link
+starts and stops.  The start/end points are one pixel before
+where the link starts and stops.  This allows you to do things
+like draw an arrow (at the stop) pointing to a circle (at the
+target) and have them both be visible at any zoom level.
 
 Overridable method for ecah drawing to render itself."
 
+  ;; TODO: the link-source and link-target behaviors here should
+  ;; probably be defun/defsubst'd out.  They're remarkably similar.
   (let* ((style-plist (first args))
          (connector-offset (plist-get style-plist :connector-offset))
          (outline-style (plist-get style-plist :outline-style))
@@ -393,6 +406,19 @@ Overridable method for ecah drawing to render itself."
             (first-pt-y (funcall y-transformer (2dg-y (first points)))))
         (when link-start
           (error "2dd-render for links needs to implement link start markers"))
+        (when (oref (oref link _source-connector) connectee)
+          (let ((source-style (plist-get style-plist :link-source)))
+            (when source-style
+              (unless (eq source-style 'circle)
+                (error "2dd-render for links is only able to use 'circle for a source-style"))
+              (let* ((pt (2dd-connection-point (oref link _source-connector)))
+                     (pt-x (funcall x-transformer (2dg-x pt)))
+                     (pt-y (funcall y-transformer (2dg-y pt))))
+                (2dd---scratch-safe-set-keep-style scratch
+                                                   pt-x
+                                                   pt-y
+                                                   "O")))))
+          ;; has a source connection
         (let ((last-pt-x first-pt-x)
               (last-pt-y first-pt-y)
               (double-pt-x)
@@ -426,6 +452,18 @@ Overridable method for ecah drawing to render itself."
                                  (error "Unknown end link style: %s" link-end))
                                (or (plist-get style-plist :end-style)
                                    outline-style)))
+          (when (oref (oref link _target-connector) connectee)
+            (let ((target-style (plist-get style-plist :link-target)))
+              (when target-style
+                (unless (eq target-style 'circle)
+                  (error "2dd-render for links is only able to use 'circle for a target-style"))
+                (let* ((pt (2dd-connection-point (oref link _target-connector)))
+                       (pt-x (funcall x-transformer (2dg-x pt)))
+                       (pt-y (funcall y-transformer (2dg-y pt))))
+                  (2dd---scratch-safe-set-keep-style scratch
+                                                     pt-x
+                                                     pt-y
+                                                     "O")))))
           (when (2dd-get-edit-idx link)
             (cl-loop with edit-idx-style = (plist-get style-plist :edit-idx-style)
                      for point in (2dd-edit-idx-points link)
