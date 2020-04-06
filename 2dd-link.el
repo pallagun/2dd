@@ -9,6 +9,13 @@
 (require '2dd-viewport)
 (require '2dd-link-connector)
 
+(defconst 2dd-link-min-terminal-segment-ratio 2
+  "The terminal segment of a link must have a length of at least
+this ratio multiplied by the apparent pixel size.")
+(defconst 2dd-link-min-segment-ratio 1
+  "All segments of a link must have a length of at least this
+ratio multiplied by the apparent pixel size.")
+
 (defclass 2dd-link (2dd-editable-drawing)
   ((_source-connector :reader 2dd-get-source-connector
                       :writer 2dd-set-source-connector
@@ -296,43 +303,43 @@ This will modify the LINK's inner path in place."
                   t
                   "2dd-simplify for a link returned non-cardinal geometry")
           (oset link _inner-path (2dg-cardinal-path :points new-inner-points)))))))
-(defun 2dd--link-build-replot-inner-path (source-pt source-direction target-pt target-direction &optional min-segment-distance min-terminal-segment-distance)
-  "Return a valid inner-path.
+;; (defun 2dd--link-build-replot-inner-path (source-pt source-direction target-pt target-direction &optional min-segment-distance min-terminal-segment-distance)
+;;   "Return a valid inner-path.
 
-If source-direction is nil it is assumed to be unconnected and
-any direction is ok.  Fi target-direction is nil it is assumed to
-be unconnected and any direction is ok."
-  (error "Delete this because it's not used???")
-  (let ((min-segment-distance (or min-segment-distance
-                                  1.0))
-        (min-terminal-segment-distance (or min-terminal-segment-distance
-                                           1.0)))
-    (unless (and source-direction target-direction)
-      (let* ((displacement (2dg-subtract target-pt source-pt))
-             (direction (2dg-coarse-direction displacement)))
-        (unless source-direction
-          (setq source-direction direction))
-        (unless target-direction
-          (setq target-direction direction))))
+;; If source-direction is nil it is assumed to be unconnected and
+;; any direction is ok.  Fi target-direction is nil it is assumed to
+;; be unconnected and any direction is ok."
+;;   (error "Delete this because it's not used???")
+;;   (let ((min-segment-distance (or min-segment-distance
+;;                                   1.0))
+;;         (min-terminal-segment-distance (or min-terminal-segment-distance
+;;                                            1.0)))
+;;     (unless (and source-direction target-direction)
+;;       (let* ((displacement (2dg-subtract target-pt source-pt))
+;;              (direction (2dg-coarse-direction displacement)))
+;;         (unless source-direction
+;;           (setq source-direction direction))
+;;         (unless target-direction
+;;           (setq target-direction direction))))
 
-    (2dg-build-path-cardinal source-pt
-                             target-pt
-                             (2dg-vector-from-direction source-direction)
-                             (2dg-vector-from-direction target-direction)
-                             min-segment-distance
-                             (if source-direction
-                                 min-terminal-segment-distance
-                               nil)
-                             (if target-direction
-                                 min-terminal-segment-distance))))
+;;     (2dg-build-path-cardinal source-pt
+;;                              target-pt
+;;                              (2dg-vector-from-direction source-direction)
+;;                              (2dg-vector-from-direction target-direction)
+;;                              min-segment-distance
+;;                              (if source-direction
+;;                                  min-terminal-segment-distance
+;;                                nil)
+;;                              (if target-direction
+;;                                  min-terminal-segment-distance))))
 
 (cl-defmethod 2dd-replot-inner-path ((link 2dd-link) &optional min-segment-distance min-terminal-segment-distance)
   "Replot the inner path of this link based on the cardinal-path plotter."
   ;; TODO - refactor this to use 2dd--link-build-replot-inner-path. - or don't
   (let ((min-segment-distance (or min-segment-distance
-                                  1.0))
+                                  2dd-link-min-segment-ratio))
         (min-terminal-segment-distance (or min-terminal-segment-distance
-                                           2.0)))
+                                           2dd-link-min-terminal-segment-ratio)))
     (with-slots (_source-connector _target-connector) link
       (let* ((source-connected (2dd-get-connectee _source-connector))
              (target-connected (2dd-get-connectee _target-connector))
@@ -640,12 +647,12 @@ CHILD-FN should produce a list of all child drawings of a given
                                                  (if target-requires-direction
                                                      (2dg-reverse target-edge)
                                                    coarse-direction))
-                                                0.5
+                                                2dd-link-min-segment-ratio
                                                 (if source-requires-direction
-                                                    1.0
+                                                    2dd-link-min-terminal-segment-ratio
                                                   nil)
                                                 (if target-requires-direction
-                                                    1.0
+                                                    2dd-link-min-terminal-segment-ratio
                                                   nil)))
            (path (2dg-simplify rough-path)))
       (unless source-requires-direction
