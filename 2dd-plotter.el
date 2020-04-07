@@ -11,12 +11,6 @@
 (require '2dd-point)
 (require '2dd-util)
 
-(defconst 2dd-plot-default-link-min-segment-distance 1.0
-  "Default minimum length of a link segment during plotting.")
-(defconst 2dd-plot-default-link-min-terminal-segment-distance 2.0
-  "Default minimum length of the link's starting and ending segments")
-
-
 ;; "rectangles and nodes first, then arrows approach."
 ;; for plotting, you should supply a tree's root node
 ;; 1) go through all rect and point renderabel items and divide them out.
@@ -73,32 +67,46 @@ is external to the element, Padding is internal."
   (unless (functionp preserve-drawing-p-fn)
     (error "Preserve-drawing-p-fn must be a function"))
   (let ((rect-method (or (plist-get settings :rect-method) 'simple-grid))
-        (link-method (or (plist-get settings :link-method) 'nearest-edge)))
-    ;; rectangles first, then links.
-    (case rect-method
-      ('simple-grid
-       (2dd--plot-simple-grid root-drawing
-                              canvas
-                              child-fn
-                              preserve-drawing-p-fn
-                              settings))
-      (_
-       (error "Unknown drawing rect-method: %s" rect-method)))
-    ;; next links
-    (case link-method
-      ('nearest-edge
-       (2dd--plot-nearest-edge root-drawing
-                               canvas
-                               child-fn
-                               preserve-drawing-p-fn
-                               settings))
-      (_
-       (error "Unknown drawing link-method: %s" link-method)))
-    ))
+        (link-method (or (plist-get settings :link-method) 'nearest-edge))
+        (completed-list))
+    (let ((should-plot (lambda (drawing)
+                         (if (memq drawing completed-list)
+                             nil
+                           (push drawing completed-list)
+                           t))))
 
-(defun 2dd--plot-nearest-edge (drawing canvas child-fn preserve-drawing-p-fn settings &optional force-replot)
+      ;; TODO - a single drawing can have more than one parent so this
+      ;; may cause drawings to be plotted twice.  This needs to be
+      ;; compressed.
+
+      ;; rectangles first, then links.
+      (case rect-method
+        ('simple-grid
+         (2dd--plot-simple-grid root-drawing
+                                canvas
+                                child-fn
+                                preserve-drawing-p-fn
+                                should-plot
+                                settings))
+        (_
+         (error "Unknown drawing rect-method: %s" rect-method)))
+      ;; next links
+      (case link-method
+        ('nearest-edge
+         (2dd--plot-nearest-edge root-drawing
+                                 canvas
+                                 child-fn
+                                 preserve-drawing-p-fn
+                                 should-plot
+                                 settings))
+        (_
+         (error "Unknown drawing link-method: %s" link-method)))
+      )))
+
+(defun 2dd--plot-nearest-edge (drawing canvas child-fn preserve-drawing-p-fn should-plot-fn settings &optional force-replot)
   "Plot links using a nearest-edge method."
-  (when (2dd-link-class-p drawing)
+  (when (and (2dd-link-class-p drawing)
+             (funcall should-plot-fn drawing))
     (2dd--plot-nearest-edge-worker drawing canvas))
   (let ((inner-canvas (2dd-get-inner-canvas drawing)))
     (cl-loop for child in (funcall child-fn drawing)
@@ -106,6 +114,7 @@ is external to the element, Padding is internal."
                                         inner-canvas
                                         child-fn
                                         preserve-drawing-p-fn
+                                        should-plot-fn
                                         settings
                                         nil))))
 (defun 2dd--plot-nearest-edge-worker (link canvas)
@@ -114,26 +123,39 @@ is external to the element, Padding is internal."
   (let ((source-connector (2dd-get-source-connector link))
         (target-connector (2dd-get-target-connector link)))
     (cl-flet ((set-connector-location
-               (connector)
-               (if (2dd-get-connectee connector)
-                   ;; This has something to connect to, assume it's a rect for now.
-                   (2dd--set-location connector '(:edge up :relative-coord 0.5))
-                 ;; This does not have something to connect to.  Place it anywhere.
-                 (2dd--set-location connector `(:edge up :absolute-coord ,(2dg-centroid canvas))))))
+               (connector other-point)
+               (let ((connectee (2dd-get-connectee connector)))
+                 (if connectee
+                     ;; This has something to connect to, assume it's
+                     ;; a rect for now.
+                     (if other-point
+                         ;; This has something to connect to and
+                         ;; someplace to head towards.
+                         (let ((edge (2dd-leaving-segment-collision-edge connectee
+                                                                         other-point)))
+                           (2dd--set-location connector
+                                              `(:edge ,edge :relative-coord 0.5)))
+                       ;; Unable to determine where to go, connect to
+                       ;; top edge for now.
+                       (2dd--set-location connector '(:edge up :relative-coord 0.5)))
+                   ;; This does not have something to connect to.  Place it anywhere.
+                   (2dd--set-location connector
+                                      `(:edge up :absolute-coord ,(2dg-centroid canvas)))))))
       (unless (2dd-has-location source-connector)
-        (set-connector-location source-connector))
+        (set-connector-location
+         source-connector
+         (or (2dd-connection-point target-connector)
+             (let ((connectee (2dd-get-connectee target-connector)))
+               (when connectee
+                 (2dg-centroid (2dd-geometry connectee)))))))
       (unless (2dd-has-location target-connector)
-        (set-connector-location target-connector))
-      (let ((path (2dg-build-path-cardinal (2dd-connection-point source-connector)
-                                           (2dd-connection-point target-connector)
-                                           (2dg-vector-from-direction
-                                            (2dd-from-connectee-direction source-connector))
-                                           (2dg-vector-from-direction
-                                            (2dd-to-connectee-direction target-connector))
-                                           2dd-plot-default-link-min-segment-distance
-                                           2dd-plot-default-link-min-terminal-segment-distance
-                                           2dd-plot-default-link-min-terminal-segment-distance)))
-        (2dd-set-inner-path link (2dg-truncate (2dg-simplify path) 1 1))))))
+        (set-connector-location
+         target-connector
+         (or (2dd-connection-point source-connector)
+             (let ((connectee (2dd-get-connectee target-connector)))
+               (when connectee
+                 (2dg-centroid (2dd-geometry connectee)))))))
+      (2dd-replot-inner-path link))))
 
 (defun 2dd---simple-grid-dimensions-by-num-children (num-children)
   "Given a NUM-CHILDREN return the dimensions of a grid which can hold them.
@@ -143,7 +165,7 @@ It will be able to hold at least that many children, possibly more."
   (let ((num-columns (ceiling (sqrt num-children))))
     (list :columns num-columns
           :rows (ceiling (/ (float num-children) (float num-columns))))))
-(defun 2dd--plot-simple-grid (drawing canvas child-fn preserve-drawing-p-fn settings &optional force-replot parent-inner-canvas)
+(defun 2dd--plot-simple-grid (drawing canvas child-fn preserve-drawing-p-fn should-plot-fn settings &optional force-replot parent-inner-canvas)
   ;; TODO - fix this, the CANVAS argument is no longer really a
   ;; canvas, it's a geometry that must be used.
   "When force-replot is true it's because some parent drawing got replotted.
@@ -154,7 +176,8 @@ When plotting in simple grid mode:
 
 This function will stop decending to child drawings when it
 encounters a 2dd-link type drawing."
-  (unless (2dd-link-class-p drawing)
+  (when (and (not (2dd-link-class-p drawing))
+             (funcall should-plot-fn drawing))
     (let ((horizontal-pad (or (plist-get settings :inner-padding-horizontal) 0.0))
           (vertical-pad (or (plist-get settings :inner-padding-vertical) 0.0)))
       (cl-flet ((inner-pad (lambda (rect)
@@ -216,6 +239,7 @@ encounters a 2dd-link type drawing."
                                                          grid-cell)
                                                        child-fn
                                                        preserve-drawing-p-fn
+                                                       should-plot-fn
                                                        settings
                                                        t
                                                        inner-canvas)
@@ -243,6 +267,7 @@ encounters a 2dd-link type drawing."
                                                      new-absolute-coord)
                                                    child-fn
                                                    preserve-drawing-p-fn
+                                                   should-plot-fn
                                                    settings
                                                    t ;; TODO - URGENT - this shouldn't be a t, that's force replotting everything - that may not be needed.
                                                    new-inner-canvas))))))))))
@@ -290,7 +315,6 @@ inject any links that may need a replot into the
 2dd--update-plot-all CHILD-DRAWINGS call as if they were a child
 drawing.  This will cause links to be double-replotted for no
 reason.  For now that'll have to be how things are.")
-
 (cl-defmethod 2dd-update-plot ((drawing 2dd-drawing) new-geometry child-fn &optional parent-drawing sibling-drawings)
   "Update DRAWING to have NEW-GEOMETRY.
 
