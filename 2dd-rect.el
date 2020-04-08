@@ -353,7 +353,7 @@ CHILD-FN should produce a list of all child drawings of a given
 
   (let* ((relative-coord (or (2dd-get-relative-geometry rect)
                              (2dg-relative-coordinates old-parent-canvas
-                                                       (2dd-geometry child))))
+                                                       (2dd-geometry rect))))
          (new-absolute-coords (2dg-absolute-coordinates new-parent-canvas
                                                         relative-coord)))
     (2dd--set-geometry-and-update-plot rect

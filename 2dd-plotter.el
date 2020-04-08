@@ -203,7 +203,8 @@ encounters a 2dd-link type drawing."
 
           (when must-replot
             (2dd-set-from drawing canvas parent-inner-canvas)
-            (2dd-set-padding drawing horizontal-pad vertical-pad))
+            (when (2dd-with-inner-canvas-class-p drawing)
+              (2dd-set-padding drawing horizontal-pad vertical-pad)))
 
           (when child-drawings
             (if (or (not prev-inner-canvas)
@@ -214,40 +215,52 @@ encounters a 2dd-link type drawing."
                           child-drawings))
                 ;; Parent is new or at least one child must be
                 ;; replotted, therefore all children must be replotted.
-                (let* ((grid-dimensions (2dd---simple-grid-dimensions-by-num-children
-                                         (length child-drawings)))
-                       (inner-canvas (2dd-get-inner-canvas drawing))
-                       (is-division-rect (2dd-division-rect-class-p drawing))
-                       ;; TODO - I think the above + below lines
-                       ;; indicate 2dd-split-grid should accept the
-                       ;; drawing as an argument to be generalized on.
-                       (grid-cells (2dd-split-grid inner-canvas
-                                                   (plist-get grid-dimensions :rows)
-                                                   (plist-get grid-dimensions :columns)
-                                                   (if is-division-rect nil (plist-get settings :sibling-margin-horizontal))
-                                                   (if is-division-rect nil (plist-get settings :sibling-margin-vertical)))))
-                  ;; for each child, replot it in the grid-cell with the same idx
-                  (when is-division-rect
-                    (2dd-set-divisions-absolute drawing grid-cells))
-                  (cl-loop for child-drawing in child-drawings
-                           for division-idx from 0 to (1- (length child-drawings))
-                           for grid-cell in grid-cells
-                           do (progn
-                                (2dd--plot-simple-grid child-drawing
-                                                       (if is-division-rect
-                                                           (2dd--build-relative-division-rect-reference drawing division-idx)
-                                                         grid-cell)
+                (if (2dd-point-class-p drawing)
+                    ;; the parent drawing is a point
+                    (cl-loop for child-drawing in child-drawings
+                             do (2dd--plot-simple-grid child-drawing
+                                                       nil
                                                        child-fn
                                                        preserve-drawing-p-fn
                                                        should-plot-fn
                                                        settings
                                                        t
-                                                       inner-canvas)
-                                ;; (when (2dd-with-parent-relative-location-class-p child-drawing)
-                                ;;   (2dd-set-relative-geometry child-drawing
-                                ;;                              (2dg-relative-coordinates inner-canvas
-                                ;;                                                        (2dd-geometry child-drawing))))
-                                )))
+                                                       nil))
+                  ;; The parent drawing is not a point.
+                  (let* ((grid-dimensions (2dd---simple-grid-dimensions-by-num-children
+                                           (length child-drawings)))
+                         (inner-canvas (2dd-get-inner-canvas drawing))
+                         (is-division-rect (2dd-division-rect-class-p drawing))
+                         ;; TODO - I think the above + below lines
+                         ;; indicate 2dd-split-grid should accept the
+                         ;; drawing as an argument to be generalized on.
+                         (grid-cells (2dd-split-grid inner-canvas
+                                                     (plist-get grid-dimensions :rows)
+                                                     (plist-get grid-dimensions :columns)
+                                                     (if is-division-rect nil (plist-get settings :sibling-margin-horizontal))
+                                                     (if is-division-rect nil (plist-get settings :sibling-margin-vertical)))))
+                    ;; for each child, replot it in the grid-cell with the same idx
+                    (when is-division-rect
+                      (2dd-set-divisions-absolute drawing grid-cells))
+                    (cl-loop for child-drawing in child-drawings
+                             for division-idx from 0 to (1- (length child-drawings))
+                             for grid-cell in grid-cells
+                             do (progn
+                                  (2dd--plot-simple-grid child-drawing
+                                                         (if is-division-rect
+                                                             (2dd--build-relative-division-rect-reference drawing division-idx)
+                                                           grid-cell)
+                                                         child-fn
+                                                         preserve-drawing-p-fn
+                                                         should-plot-fn
+                                                         settings
+                                                         t
+                                                         inner-canvas)
+                                  ;; (when (2dd-with-parent-relative-location-class-p child-drawing)
+                                  ;;   (2dd-set-relative-geometry child-drawing
+                                  ;;                              (2dg-relative-coordinates inner-canvas
+                                  ;;                                                        (2dd-geometry child-drawing))))
+                                  ))))
               ;; every child drawing exists and all of them should be
               ;; preserved.  The parent has a previous inner canvas, use
               ;; that to carry over relative layout
@@ -425,10 +438,13 @@ PARENT-DRAWING may be nil, sibling-drawings may be nil."
                                      ((2dg-rect-class-p (first child-geometry))
                                       (first child-geometry))
                                      (t (error "Unable to determine outer shell from geometry")))))
-        (if (and parent-inner-canvas
-                 (2dg-contains parent-inner-canvas child-outer-shell))
-            t
-          nil))
+        (and parent-inner-canvas
+             (2dg-contains parent-inner-canvas child-outer-shell))
+        ;; (if (and parent-inner-canvas
+        ;;          (2dg-contains parent-inner-canvas child-outer-shell))
+        ;;     t
+        ;;   nil)
+        )
     ;; No parent drawing provided, unable to validate constraint, assume failure
     nil))
 (defun 2dd--validate-exclusive (sibling-drawings changed-geometry)
@@ -439,7 +455,12 @@ the first element contains the outer shell."
   (let ((shell (if (listp changed-geometry)
                    (first changed-geometry)
                  changed-geometry)))
-    (cl-loop for sibling-drawing in sibling-drawings
+    ;; sibling drawings for consideration must be exclusive or captive+exclusive
+    (cl-loop for sibling-drawing in (seq-filter (lambda (drawing)
+                                                  (let ((constraint (2dd-get-constraint drawing)))
+                                                    (or (eq constraint 'exclusive)
+                                                        (eq constraint 'captive+exclusive))))
+                                                sibling-drawings)
              for sibling-geometry = (2dd-geometry sibling-drawing)
              when (2dg-has-intersection shell sibling-geometry 'strict)
              do (cl-return nil)

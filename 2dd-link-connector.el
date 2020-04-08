@@ -40,10 +40,12 @@
       (when location
         (let ((relative-coord (plist-get location :relative-coord))
               (edge (plist-get location :edge)))
+          (error "Fix this, needs to handle points and rects.")
           (when (and relative-coord edge)
             ;; TODO - should this be at the front of the plist to make
             ;; it more efficient?  - should it not be in a plist at
             ;; all?
+
             (plist-put (oref connector location)
                        :lambda (2dd--link-connector-build-rect-relative-lambda
                                 edge
@@ -169,6 +171,10 @@ connector is relative."
     (2dd--rect-edge-point rect-drawing
                           edge
                           relative-coord)))
+(defsubst 2dd--link-connector-build-point-relative-lambda ()
+  "Return a lambda for producing a point from a connectee point based on relative geometry (which there is none of since it's a point)."
+  (lambda (point-drawing)
+    (2dd-geometry point-drawing)))
 
 (cl-defgeneric 2dd--set-location ((connector 2dd-link-connector) location)
   "Set the CONNECTOR's location to be LOCATION.")
@@ -199,19 +205,21 @@ relative coord the absolute-coord will be ignored.
 
     (unless (or edge absolute-coord)
       (error "Edge or absolute coordinate required to form connection."))
-    (when (and relative-coord (not (2dd-rect-class-p connectee)))
+    (when (and relative-coord
+               (not (2dd-rect-class-p connectee))
+               (not (2dd-point-class-p connectee)))
       (error "Unable to set relative-coordinates for connection to a non-rectangle"))
 
     (oset connector
           location
-          (cond ((and connectee edge relative-coord)
+          (cond ((and edge (2dd-point-class-p connectee))
+                 (list :lambda (2dd--link-connector-build-point-relative-lambda)
+                       :edge edge))
+
+                ((and edge relative-coord (2dd-rect-class-p connectee))
                  ;; connect to connectee's edge
                  (list :lambda (2dd--link-connector-build-rect-relative-lambda
                                 edge relative-coord)
-                       ;; (lambda (rect-drawing)
-                       ;;   (2dd--rect-edge-point rect-drawing
-                       ;;                         edge
-                       ;;                         relative-coord))
                        :edge edge
                        :relative-coord relative-coord))
                 (absolute-coord

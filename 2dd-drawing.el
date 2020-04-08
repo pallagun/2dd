@@ -199,7 +199,8 @@ By default, drawings do not have inner-canvases."
   :documentation "A drawing which could have its shape edited.")
 (defsubst 2dd-editable-drawing-class-p (any)
   "Equivalent of (object-of-class-p ANY '2dd-editable-drawing)."
-  (object-of-class-p any '2dd-editable-drawing))
+  (and (recordp any)
+       (object-of-class-p any '2dd-editable-drawing)))
 (cl-defgeneric 2dd-build-idx-edited-geometry ((drawing 2dd-editable-drawing) (edit-idx integer) (move-vector 2dg-point))
   "Return new geometry based off moving EDIT-IDX of DRAWING by MOVE-VECTOR.
 
@@ -269,6 +270,10 @@ Return is of the form '(EDIT-IDX-NUM . EDIT-IDX-POINT)"
                        :type float))
   :abstract t
   :documentation "When a drawing has an inner canvas this class holds the current plotting information relevant to child drawings.")
+(defsubst 2dd-with-inner-canvas-class-p (any)
+  "Equivalent of (object-of-class-p ANY '2dd-with-inner-canvas)"
+  (and (recordp any)
+       (object-of-class-p any '2dd-with-inner-canvas)))
 (cl-defmethod 2dd-has-inner-canvas-p ((drawing-with-inner 2dd-with-inner-canvas))
   "Drawings declared to have an inner canavs will return 't here.
 

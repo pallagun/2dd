@@ -42,14 +42,40 @@ Selection preference order:
 - link drawings
 - Rectange drawings
 - The root element"
-  ;; TODO - this function does not current take containment constraints into account, it should.
-  ;; it only assumes that all drawings are fully contained.
+  ;; TODO - this function does not currently take containment
+  ;; constraints into account, it should.  it only assumes that all
+  ;; drawings are fully contained.
+
+  ;; TODO - this function does not currently understand that a single
+  ;; drawing can have two parent, it may be traversing sections of the
+  ;; graph multiple times.
+
+  ;; TODO - this function currently traverses the entire tree 3 times,
+  ;; it could probably traverse it only one time and bin the results
+  ;; by type.
   (let ((start-drawing (oref diagram _root)))
     (nconc
-     ;; (2dd---find-point selection-rect start-drawing)
+     (nreverse (2dd---find-point selection-rect start-drawing child-fn))
      (nreverse (2dd---find-link selection-rect start-drawing child-fn))
      (nreverse (2dd---find-other selection-rect start-drawing child-fn)))))
 
+(defun 2dd---find-point (selection-rect drawing child-fn)
+  "Get point elements in SELECTION-RECT.
+
+Returns a list (ordered by least specific) of all 2dd-link items
+which are in the selection-rect.
+
+Start searching at DRAWING  When nothing is found return
+nil."
+  (let* ((per-child-results (mapcar (lambda (child)
+                                      (2dd---find-point selection-rect child child-fn))
+                                    (funcall child-fn drawing)))
+         (child-results (apply #'nconc per-child-results)))
+
+    (if (and (2dd-point-class-p drawing)
+             (2dg-has-intersection selection-rect (2dd-geometry drawing)))
+        (cons drawing child-results)
+      child-results)))
 
 (defun 2dd---find-link (selection-rect drawing child-fn)
   "Get first transition element in SELECTION-RECT.
