@@ -23,10 +23,13 @@
              :initform nil
              :type list
              :documentation "Where this connector is.")
-   ;; TODO - pretty sure this last point isn't used anymore.
-   (last-point :initform nil
-               :type (or null 2dg-point)
-               :documentation "Wherever the actual connection
+   ;; TODO rename this without the underscore in front, that's weird.
+   ;; It happened for debugging reasons but is now no longer needed.
+   (_last-point :initform nil
+                :type (or null 2dg-point)
+                :reader 2dd-get-last-point
+                :writer 2dd-set-last-point
+                :documentation "Wherever the actual connection
                point was last.  This is used to track how a
                connection point has changed when there is a
                change."))
@@ -51,6 +54,17 @@
                                 edge
                                 relative-coord))))))
     connector))
+(cl-defmethod 2dd-pprint ((connector 2dd-link-connector))
+  "Pretty print CONNECTOR."
+  (with-slots (connectee location _last-point) connector
+    (format "cn:to:%s, by[%s], last[%s]"
+            (if connectee
+                (2dd-pprint connectee)
+              "UNCONNECTED")
+            (2dd-serialize-geometry connector)
+            (if _last-point
+                (2dg-pprint _last-point)
+              nil))))
 
 (cl-defmethod 2dd-set-connectee :before ((this 2dd-link-connector) value)
   ;; If you're going to be setting the connectee to something new I'll
@@ -133,14 +147,7 @@ positioning."
 (cl-defmethod 2dd-has-connection ((connector 2dd-link-connector))
   "Return t if CONNECTOR has a connection to another drawing, nil otherwise."
   (and (oref connector connectee) t))
-(cl-defmethod 2dd-pprint ((connector 2dd-link-connector))
-  "Pretty print CONNECTOR."
-  (with-slots (connectee location) connector
-    (format "cn:to:%s, by[%s]"
-            (if connectee
-                (2dd-pprint connectee)
-              "UNCONNECTED")
-            (2dd-serialize-geometry connector))))
+
 (defsubst 2dd--copy-plist-remove (plist-to-copy removal-keys)
   "Return a copy of PLIST-TO-COPY with REMOVAL-KEYS missing."
   (cl-loop for elt in plist-to-copy
@@ -164,7 +171,6 @@ connector is relative."
               (cons (2dd-connection-point connector 0) geometry))
       geometry)))
 
-
 (defsubst 2dd--link-connector-build-rect-relative-lambda (edge relative-coord)
   "Return a lambda for producing a point from a connectee rectangle based on relative geometry."
   (lambda (rect-drawing)
@@ -174,7 +180,19 @@ connector is relative."
 (defsubst 2dd--link-connector-build-point-relative-lambda ()
   "Return a lambda for producing a point from a connectee point based on relative geometry (which there is none of since it's a point)."
   (lambda (point-drawing)
-    (2dd-geometry point-drawing)))
+    ;; Because I don't want a reference to the drawing point, I want
+    ;; the value of the drawing's point.  TODO: is there some better
+    ;; way to do this?
+    (clone
+     (2dd-geometry point-drawing))))
+(cl-defgeneric 2dd-clear-location ((connector 2dd-link-connector))
+  "Clear out CONNECTOR's location information.
+
+This should only be done before triggering a replot.")
+(cl-defgeneric 2dd-clear-location ((connector 2dd-link-connector))
+  "Clear out CONNECTOR's location information."
+  (oset connector location nil)
+  (oset connector _last-point nil))
 
 (cl-defgeneric 2dd--set-location ((connector 2dd-link-connector) location)
   "Set the CONNECTOR's location to be LOCATION.")
@@ -229,7 +247,7 @@ relative coord the absolute-coord will be ignored.
                          :edge edge)))
                 (t
                  (error "2dd--set-location: Invalid location list: %s" location ))))
-    (oset connector last-point (2dd-connection-point connector))))
+    (oset connector _last-point (2dd-connection-point connector))))
 
 (cl-defgeneric 2dd--move-location ((connector 2dd-link-connector) location &optional test-only allow-closest-match)
   "Try to move CONNECTOR to the new LOCATION.
@@ -251,36 +269,40 @@ constraints.")
   "Move CONNECTOR to ABSOLUTE-COORD."
   ;; if this is an absolute-coord location already, simply move it.
   (with-slots (location connectee) connector
-    (let ((current-absolute-coord (plist-get location :absolute-coord)))
-      (if current-absolute-coord
-          ;; location already has an absolute coordinate, simply update it.
-          (if test-only
-              (let ((output (2dd--copy-plist-remove location '(:lambda))))
-                (plist-put output :absolute-coord absolute-coord)
-                output)
-            ;; not a test, actually do it.
-            (plist-put location :absolute-coord absolute-coord)
-            (2dd--copy-plist-remove location '(:lambda)))
-        ;; location does not have an absolute coordinate, move while
-        ;; obeying constraints.  Currently only able to connect to rectangles.
-        (let* ((current-edge (2dd-from-connectee-direction connector))
-               (connectee-rect (2dd-geometry connectee))
-               (best-location (2dd--get-best-rect-location connectee-rect
-                                                           absolute-coord
-                                                           current-edge)))
-          (if (and (not allow-closest-match)
-                   (not (2dg-almost-equal (plist-get best-location :absolute-coord)
-                                          absolute-coord)))
-              ;; Not allowing closest matches and this new location does
-              ;; not match.  This is a failure
-              nil
-            ;; closest matches allowed or this is actually a perfect match.
+    (if (2dd-point-class-p connectee)
+        ;; If you're connected to a point, you're not moving.
+        nil
+      ;; Otherwise you're connected to nothing or a rect, maybe you can move.
+      (let ((current-absolute-coord (plist-get location :absolute-coord)))
+        (if current-absolute-coord
+            ;; location already has an absolute coordinate, simply update it.
             (if test-only
-                ;; simply return the location
-                best-location
-              ;; set the location and return it.
-              (2dd--set-location connector best-location)
-              best-location)))))))
+                (let ((output (2dd--copy-plist-remove location '(:lambda))))
+                  (plist-put output :absolute-coord absolute-coord)
+                  output)
+              ;; not a test, actually do it.
+              (plist-put location :absolute-coord absolute-coord)
+              (2dd--copy-plist-remove location '(:lambda)))
+          ;; location does not have an absolute coordinate, move while
+          ;; obeying constraints.  Currently only able to connect to rectangles.
+          (let* ((current-edge (2dd-from-connectee-direction connector))
+                 (connectee-rect (2dd-geometry connectee))
+                 (best-location (2dd--get-best-rect-location connectee-rect
+                                                             absolute-coord
+                                                             current-edge)))
+            (if (and (not allow-closest-match)
+                     (not (2dg-almost-equal (plist-get best-location :absolute-coord)
+                                            absolute-coord)))
+                ;; Not allowing closest matches and this new location does
+                ;; not match.  This is a failure
+                nil
+              ;; closest matches allowed or this is actually a perfect match.
+              (if test-only
+                  ;; simply return the location
+                  best-location
+                ;; set the location and return it.
+                (2dd--set-location connector best-location)
+                best-location))))))))
 
 (defun 2dd--get-best-rect-location (rect desired-point current-connector-edge)
   (cl-labels ((sort-predicate

@@ -29,10 +29,10 @@
 ;;
 ;; I think I need a hint (or some type of parent-relative coordinates) because without that
 ;; the plotting could get out of hand.
-(cl-defgeneric 2dd-plot ((drawing 2dd-drawing) (canvas 2dd-canvas) child-fn preserve-drawing-p-fn &optional settings)
+(cl-defgeneric 2dd-plot ((drawing 2dd-drawing) canvas child-fn preserve-drawing-p-fn &optional settings)
   ;; TODO - preserve-drawing-p-fn should really be replot-drawing-p-fn.  I'm having to negate it everywhere.
   "Plot DRAWING on CANVAS.")
-(cl-defmethod 2dd-plot ((root-drawing 2dd-drawing) (canvas 2dd-canvas) child-fn preserve-drawing-p-fn &optional settings)
+(cl-defmethod 2dd-plot ((root-drawing 2dd-drawing) canvas child-fn preserve-drawing-p-fn &optional settings)
   "(Re)Plot drawings for all elements on a CANVAS.
 
 Drawings are modified in place.
@@ -432,8 +432,9 @@ PARENT-DRAWING may be nil, sibling-drawings may be nil."
             ;; child geometry may come as a normal rectangle or (in
             ;; the case of a division-rect as the first element of a
             ;; list.
-            (child-outer-shell (cond ((and (recordp child-geometry)
-                                           (2dg-rect-class-p child-geometry))
+            (child-outer-shell (cond ((and child-geometry
+                                           (or (2dg-rect-p child-geometry)
+                                               (2dg-point-p child-geometry)))
                                       child-geometry)
                                      ((2dg-rect-class-p (first child-geometry))
                                       (first child-geometry))

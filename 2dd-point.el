@@ -85,14 +85,9 @@ Overridable method for ecah drawing to render itself."
 
       (2dd---scratch-label scratch x y label (plist-get style-plist :label-style)))))
 
-(cl-defmethod 2dd-build-move-edited ((pt 2dd-point) (move-vector 2dg-point) (viewport 2dd-viewport))
-  "Given a PT drawing and a MOVE-VECTOR, apply the movement.
-
-TODO - VIEWPORT is passed in here but not actually needed, remove it."
-  (let ((new-pt (clone pt)))
-    (oset new-pt _geometry (2dg-point :x (+ (2dg-x pt) (2dg-x move-vector))
-                                      :y (+ (2dg-y pt) (2dg-y move-vector))))
-    new-pt))
+(cl-defgeneric 2dd-build-move-edited-geometry ((point 2dd-drawing) (move-vector 2dg-point))
+  "Given a PT drawing and a MOVE-VECTOR, apply the movement."
+  (2dg-add (oref point _geometry) move-vector))
 
 (cl-defmethod 2dd--update-plot ((point 2dd-point) (old-parent-canvas 2dd-canvas) (new-parent-canvas 2dd-canvas) child-fn)
   "Update POINT based on a parent drawing changing.

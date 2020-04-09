@@ -105,7 +105,6 @@ No checking is done before geometry is changed."
       (oset link _edit-history (union (oref link _edit-history)
                                       (plist-get geo-plist :edit-history)))
       )))
-
 (cl-defmethod 2dd-needs-replot ((link 2dd-link))
   "Return non-nil if LINK needs to be replotted."
   (or (not (2dd-has-location (oref link _target-connector)))
@@ -181,6 +180,11 @@ be replotted."
         (error "Inner path must have a cardinal displacement to the target connector"))))
 
   (oset link _inner-path inner-path))
+(cl-defmethod 2dd-edit-history-contains-p ((link 2dd-link) (edit-type symbol))
+  "Return non-nil if LINK's edit history contains EDIT-TYPE.
+
+EDIT type must be one of 'source, 'target or 'inner-path."
+  (memq edit-type (oref link _edit-history)))
 (cl-defgeneric 2dd-clear-inner-path ((link 2dd-link))
   "Set the inner path of LINK to be nil."
   (oset link _inner-path nil))
@@ -303,35 +307,6 @@ This will modify the LINK's inner path in place."
                   t
                   "2dd-simplify for a link returned non-cardinal geometry")
           (oset link _inner-path (2dg-cardinal-path :points new-inner-points)))))))
-;; (defun 2dd--link-build-replot-inner-path (source-pt source-direction target-pt target-direction &optional min-segment-distance min-terminal-segment-distance)
-;;   "Return a valid inner-path.
-
-;; If source-direction is nil it is assumed to be unconnected and
-;; any direction is ok.  Fi target-direction is nil it is assumed to
-;; be unconnected and any direction is ok."
-;;   (error "Delete this because it's not used???")
-;;   (let ((min-segment-distance (or min-segment-distance
-;;                                   1.0))
-;;         (min-terminal-segment-distance (or min-terminal-segment-distance
-;;                                            1.0)))
-;;     (unless (and source-direction target-direction)
-;;       (let* ((displacement (2dg-subtract target-pt source-pt))
-;;              (direction (2dg-coarse-direction displacement)))
-;;         (unless source-direction
-;;           (setq source-direction direction))
-;;         (unless target-direction
-;;           (setq target-direction direction))))
-
-;;     (2dg-build-path-cardinal source-pt
-;;                              target-pt
-;;                              (2dg-vector-from-direction source-direction)
-;;                              (2dg-vector-from-direction target-direction)
-;;                              min-segment-distance
-;;                              (if source-direction
-;;                                  min-terminal-segment-distance
-;;                                nil)
-;;                              (if target-direction
-;;                                  min-terminal-segment-distance))))
 
 (cl-defmethod 2dd-replot-inner-path ((link 2dd-link) &optional min-segment-distance min-terminal-segment-distance)
   "Replot the inner path of this link based on the cardinal-path plotter."
@@ -504,9 +479,13 @@ CHILD-FN should produce a list of all child drawings of a given
   ;; move them both.
 
   (with-slots (_source-connector _target-connector _inner-path _edit-history) link
-    (let ((last-source-pt (oref _source-connector last-point))
+  ;; (let ((_source-connector (oref link _source-connector))
+  ;;       (_target-connector (oref link _target-connector))
+  ;;       (_inner-path (oref link _inner-path))
+  ;;       (_edit-history (oref link _edit-history)))
+    (let ((last-source-pt (2dd-get-last-point _source-connector))
           (source-pt (2dd-connection-point _source-connector))
-          (last-target-pt (oref _target-connector last-point))
+          (last-target-pt (2dd-get-last-point _target-connector))
           (target-pt (2dd-connection-point _target-connector)))
       (let ((source-moved (not (2dg-almost-equal last-source-pt source-pt)))
             (target-moved (not (2dg-almost-equal last-target-pt target-pt))))
@@ -535,8 +514,10 @@ CHILD-FN should produce a list of all child drawings of a given
                      (setq source-pt (plist-get source-location :absolute-coord))
                      (setq source-moved t)))))
 
-          (oset _source-connector last-point source-pt)
-          (oset _target-connector last-point target-pt)
+          (2dd-set-last-point _source-connector source-pt)
+          ;; (oset _source-connector last-point source-pt)
+          (2dd-set-last-point _target-connector target-pt)
+          ;; (oset _target-connector last-point target-pt)
           ;; Choose how to manipulate the path
           (cond
            ((not (memq 'inner-path _edit-history))
@@ -579,45 +560,6 @@ CHILD-FN should produce a list of all child drawings of a given
   ;; (cl-loop for child in (funcall child-fn link)
   ;;          do (2dd--update-plot child nil nil child-fn))
   nil)
-;; (defun 2dd--link-build-edit-geometry-between (source-pt source-connected target-pt target-connected &optional source-edge target-edge)
-;;   "Return a new link geometry based on source and target parameters.
-
-;; This function will entirely replot the inner path and return a
-;; geometry-location for a link.
-
-;; SOURCE-EDGE is only used if SOURCE-CONNECTED is non-nil.
-;; TARGET-EDGE is only used if TARGET-CONNECTED is non nil.
-
-;; This is basically a replot, but only for the inner path."
-;;   (let ((path
-;;          (2dd--link-build-replot-inner-path source-pt
-;;                                             (when source-connected
-;;                                               source-edge)
-;;                                             target-pt
-;;                                             (when target-connected
-;;                                               target-edge))
-;;   (let ((source-pt (or source-absolute-coord
-;;                        (plist-get source-connector-location :absolute-coord)))
-;;         (target-pt (or target-absolute-coord
-;;                        (plist-get source-connector-location :absolute-coord)))
-;;         (source-edge (if (plist-get source-connector-location :relative-coord)
-;;                          (plist-get source-connector-location :edge)
-;;                        nil))
-;;         (target-edge (if (plist-get target-connector-location :relative-coord)
-;;                          (plist-get target-connector-location :edge)
-;;                        nil)))
-
-;;   ;; get the inner path first
-;;   HERE - fix this.
-;;   ;; :source (2dd-serialize-geometry
-;;   ;;          (oref link _target-connector))
-;;   ;; :inner-points (append (butlast current-pts 2)
-;;   ;;                       (cdr (2dg-points new-path-piece)))
-;;   ;; :target new-target-location)))
-
-
-
-;;   )
 (defun 2dd--build-link-set-unconnected-edges (link-geometry)
   ;; if the target is not relative, adjust its edge to best fit the path leading to it.
   link-geometry
