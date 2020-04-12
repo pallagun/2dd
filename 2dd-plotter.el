@@ -138,10 +138,21 @@ is external to the element, Padding is internal."
                        ;; Unable to determine where to go, connect to
                        ;; top edge for now.
                        (2dd--set-location connector '(:edge up :relative-coord 0.5)))
-                   ;; This does not have something to connect to.  Place it anywhere.
-                   (2dd--set-location connector
-                                      `(:edge up :absolute-coord ,(2dg-centroid canvas)))))))
-      (unless (2dd-has-location source-connector)
+                   ;; This does not have something to connect to.  Place it someplace
+                   (cond (canvas
+                          ;; If you have a canvas, place it there.
+                          (2dd--set-location connector
+                                             `(:edge up :absolute-coord ,(2dg-centroid canvas))))
+                         (other-point
+                          ;; If you have another point, just go relative to it.
+                          (2dd--set-location connector
+                                             (list :edge 'down
+                                                   :absolute-coord (2dg-add other-point
+                                                                            (2dg-point :x 0.0 :y 5.0)))))
+                         (
+                          (error "Unable to place connector reasonably for plotting.")))
+                         ))))
+              (unless (2dd-has-location source-connector)
         (set-connector-location
          source-connector
          (or (2dd-connection-point target-connector)

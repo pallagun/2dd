@@ -82,6 +82,8 @@
     (2dd-set-source-connector link source-connector)
     (2dd-set-target-connector link target-connector)
     (2dd-set-inner-path link inner-path)
+    ;; Tell this link not to replot the inner path.
+    ;; (oset link _edit-history '(inner-path))
 
     ;; Now move it to the left
     (let* ((location (2dd-build-idx-edited-geometry link 2 (2dg-point- -1 0)))
@@ -102,8 +104,8 @@
       (should-not (plist-get target :relative-coord))
       ;; the inner path should have changed due to replotting.
       (should (pts-almost-equal inner-points
-                                (list (2dg-point- 5 13)
-                                      (2dg-point- 9 13))))
+                                (list (2dg-point- 5 13.5)
+                                      (2dg-point- 9 13.5))))
       ;; the source connector should not have moved.
       (should (equal (plist-get source :relative-coord) 0.5))
       (should (equal (plist-get source :edge) 'up))
@@ -148,8 +150,8 @@
       (should-not (plist-get target :relative-coord))
       ;; the inner path should have changed due to reploting.
       (should (pts-almost-equal inner-points
-                                (list (2dg-point- 5 13.5)
-                                      (2dg-point- 10 13.5))))
+                                (list (2dg-point- 5 14)
+                                      (2dg-point- 10 14))))
       ;; the source connector should not have moved.
       (should (equal (plist-get source :relative-coord) 0.5))
       (should (equal (plist-get source :edge) 'up))
@@ -256,8 +258,8 @@
       (should-not (plist-get target :relative-coord))
       ;; the inner path should have changed to handle the new source
       (should (pts-almost-equal inner-points
-                                (list (2dg-point- 6 13)
-                                      (2dg-point- 10 13))))
+                                (list (2dg-point- 6 13.5)
+                                      (2dg-point- 10 13.5))))
       ;; the source connector should have moved.  Confusingly, this
       ;; segment is going to the left. so this looks wrong but is
       ;; correct.
@@ -354,8 +356,8 @@
       (should-not (plist-get target :relative-coord))
       ;; the inner path should have changed a bit as the autoplotter will have handlede it.
       (should (pts-almost-equal inner-points
-                                (list (2dg-point- 5 13)
-                                      (2dg-point- 10 13))))
+                                (list (2dg-point- 5 13.5)
+                                      (2dg-point- 10 13.5))))
       ;; the source connector should have moved left.  Because this
       ;; segment goes left, this appears wrong but is correct.
       (should (equal (plist-get source :relative-coord) 0.5))
@@ -403,8 +405,8 @@
       (should-not (plist-get target :relative-coord))
       ;; the inner path should have changed to handle the new source
       (should (pts-almost-equal inner-points
-                                (list (2dg-point- 5 13)
-                                      (2dg-point- 10 13))))
+                                (list (2dg-point- 5 13.5)
+                                      (2dg-point- 10 13.5))))
       ;; the source connector should have moved left.  Because this
       ;; segment goes left, this appears wrong but is correct.
       (should (equal (plist-get source :relative-coord) 0.5))
@@ -451,8 +453,8 @@
       (should-not (plist-get target :relative-coord))
       ;; the inner path should have changed to handle the new source
       (should (pts-almost-equal inner-points
-                                (list (2dg-point- -1 10)
-                                      (2dg-point- -1 15))))
+                                (list (2dg-point- -2 10)
+                                      (2dg-point- -2 15))))
 
       ;; the source connector should have moved.  Confusingly, this
       ;; segment is going to the left. so this looks wrong but is
@@ -503,8 +505,8 @@
       (should-not (plist-get target :relative-coord))
       ;; the inner path should have changed to handle the new source
       (should (pts-almost-equal inner-points
-                                (list (2dg-point- 11 10)
-                                      (2dg-point- 11 12.5)
+                                (list (2dg-point- 12 10)
+                                      (2dg-point- 12 12.5)
                                       (2dg-point- 8 12.5))))
 
       ;; the source connector should have moved.

@@ -36,24 +36,37 @@
   :documentation "Describes a connection point, possibly to another drawing.")
 
 (cl-defmethod make-instance ((class (subclass 2dd-link-connector)) &rest slots)
-  "Ensure all location parameters are properly set."
-  ;; TODO - should this be an :after method?
+  "Ensure all location parameters are properly set if supplied."
+  ;; TODO - should this be an :after method?  It's not really doing
+  ;; any validation just ensuring the lambdas are setup.
   (let ((connector (cl-call-next-method)))
-    (let ((location (plist-get slots :location)))
+    (let ((location (plist-get slots :location))
+          (relative-coord)
+          (edge)
+          (absolute-coord)
+          (connectee (plist-get slots :connectee)))
       (when location
-        (let ((relative-coord (plist-get location :relative-coord))
-              (edge (plist-get location :edge)))
-          (error "Fix this, needs to handle points and rects.")
-          (when (and relative-coord edge)
-            ;; TODO - should this be at the front of the plist to make
-            ;; it more efficient?  - should it not be in a plist at
-            ;; all?
-
-            (plist-put (oref connector location)
+        (setf relative-coord (plist-get location :relative-coord)
+              edge (plist-get location :edge)
+              absolute-coord (plist-get location :absolute-coord)))
+      (cond ((and connectee
+                  edge
+                  relative-coord
+                  (2dd-rect-class-p connectee))
+             ;; connecting to a rect drawing.
+             (plist-put (oref connector location)
                        :lambda (2dd--link-connector-build-rect-relative-lambda
                                 edge
-                                relative-coord))))))
+                                relative-coord)))
+            ((and connectee
+                  edge
+                  (not relative-coord)
+                  (2dd-point-class-p connectee))
+             ;; connecting to a point drawing
+             (plist-put (oref connector location)
+                        :lambda (2dd--link-connector-build-point-relative-lambda)))))
     connector))
+
 (cl-defmethod 2dd-pprint ((connector 2dd-link-connector))
   "Pretty print CONNECTOR."
   (with-slots (connectee location _last-point) connector
@@ -189,7 +202,7 @@ connector is relative."
   "Clear out CONNECTOR's location information.
 
 This should only be done before triggering a replot.")
-(cl-defgeneric 2dd-clear-location ((connector 2dd-link-connector))
+(cl-defmethod 2dd-clear-location ((connector 2dd-link-connector))
   "Clear out CONNECTOR's location information."
   (oset connector location nil)
   (oset connector _last-point nil))

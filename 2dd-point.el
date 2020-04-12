@@ -15,16 +15,25 @@
   "Equivalent of (object-of-class-p ANY '2dd-point)"
   (and (recordp any)
        (object-of-class-p any '2dd-point)))
+
+(cl-defmethod 2dd-set-geometry ((this 2dd-point) (value 2dg-rect))
+  "When setting a point by way of rectangle, use the centroid."
+  (cl-call-next-method this (2dg-centroid value)))
+
 (cl-defmethod 2dd-set-geometry :before ((this 2dd-point) value)
-  "Restrict THIS to have a VALUE which is of type 2dg-point."
-  (unless (2dg-point-p value)
-    (error "2dd-point must use a 2dg-point as their geometry")))
+  "Restrict THIS to have a VALUE which is of type 2dg-point or 2dg-rect."
+  (unless (or (2dg-point-p value)
+              (2dg-rect-p value))
+    (error "2dd-point must use a 2dg-point or (the centroid of) 2dg-rect as its geometry.  Got %s"
+           value)))
 
 (cl-defmethod 2dd-pprint ((pt 2dd-point))
   "Pretty print PT."
   (format "dr:point(%s:%s)"
           (2dd-get-label pt)
-          (2dg-pprint (oref pt _geometry))))
+          (let ((geo (oref pt _geometry)))
+            (if (oref pt _geometry)
+                (2dg-pprint (oref pt _geometry))))))
 (cl-defmethod cl-print-object ((object 2dd-point) stream)
   "This seems to be used only for edebug sessions."
   (princ (2dd-pprint object) stream))

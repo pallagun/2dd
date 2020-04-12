@@ -41,6 +41,13 @@ automatic plotting should not alter them." ))
   :documentation "A drawing for a path, optionally connecting
 other drawings.  2dd-link objects are not able to serve as parent
 drawings for other drawings.")
+(cl-defmethod make-instance ((class (subclass 2dd-link)) &rest slots)
+  "Create a 2dd-link instance."
+  ;; TODO - I think I can't do this with :initform slot options because of a bug??
+  (let ((instance (cl-call-next-method)))
+    (oset instance _source-connector (2dd-link-connector))
+    (oset instance _target-connector (2dd-link-connector))
+    instance))
 
 (defsubst 2dd-link-class-p (any)
   "Equivalent of (object-of-class-p ANY '2dd-link)."
@@ -671,7 +678,7 @@ This function only handles the start of the path changing."
       ;; there was no next-next point so use what you have.
       (append (cdr (2dg-points new-path-piece))
               (nthcdr 2 current-pts)))))
-(cl-defgeneric 2dd-build-idx-edited-geometry ((link 2dd-link) (edit-idx integer) (move-vector 2dg-point))
+(cl-defmethod 2dd-build-idx-edited-geometry ((link 2dd-link) (edit-idx integer) (move-vector 2dg-point))
   "Return new geometry based off moving EDIT-IDX of LINK by MOVE-VECTOR.
 
 This should only build a new geometry and return it (if possible)
