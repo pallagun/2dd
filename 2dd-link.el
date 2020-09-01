@@ -44,14 +44,23 @@ drawings for other drawings.")
 (cl-defmethod make-instance ((class (subclass 2dd-link)) &rest slots)
   "Create a 2dd-link instance."
   ;; TODO - I think I can't do this with :initform slot options because of a bug??
+  (message "make-instance 2dd-link (set _source/_target-connectors")
   (let ((instance (cl-call-next-method)))
-    (oset instance _source-connector (2dd-link-connector))
-    (oset instance _target-connector (2dd-link-connector))
-    instance))
+    (2dd-link-initialize-connectors instance)))
+    ;; (oset instance _source-connector (2dd-link-connector))
+    ;; (oset instance _target-connector (2dd-link-connector))
+    ;; instance))
 
+(defun 2dd-link-initialize-connectors (link)
+  "Initialize the connectors of LINK to new connectors."
+    (oset link _source-connector (2dd-link-connector))
+    (oset link _target-connector (2dd-link-connector))
+    link)
+  
 (defsubst 2dd-link-class-p (any)
   "Equivalent of (object-of-class-p ANY '2dd-link)."
-  (object-of-class-p any '2dd-link))
+  (and (recordp any)
+       (object-of-class-p any '2dd-link)))
 (cl-defmethod 2dd--plot-phase ((link 2dd-link))
   "Return the plot phase of this drawing as a symbol.
 
@@ -117,15 +126,6 @@ No checking is done before geometry is changed."
   (or (not (2dd-has-location (oref link _target-connector)))
       (not (2dd-has-location (oref link _source-connector)))))
 
-(cl-defmethod make-instance ((class (subclass 2dd-link)) &rest slots)
-  "Ensure _source and _target are not unbound."
-  (let ((instance (cl-call-next-method)))
-    (oset instance _source-connector (2dd-link-connector))
-    (oset instance _target-connector (2dd-link-connector))
-    instance))
-(defsubst 2dd-link-class-p (any)
-  "Same as (object-of-class-p ANY '2dd-link)."
-  (object-of-class-p any '2dd-link))
 (cl-defmethod 2dd-pprint ((link 2dd-link))
   "Pretty print LINK."
   (with-slots (_source-connector _target-connector _inner-path _edit-history) link

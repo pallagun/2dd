@@ -315,7 +315,7 @@ constraint.  SIBLING-DRAWINGS will be used to ensure that
 NEW-GEOMETRY does not have any collision if the drawing is set to
 have such a constraint.
 
-This function wil alter all child drawings of DRAWING as needed
+This function will alter all child drawings of DRAWING as needed
 to maintain relative positions and enforce desired constraints.
 
 Cycle is as follows:

@@ -22,7 +22,7 @@ parent drawing.  An example would be a 'child' rectangle which
 must be inside of a 'parent' rectangle.
 
 exclusive: This is a drawing which is constrained to never
-intersect any other drawing with the same parent.  No two
+intersect any other drawing with the same parent.  Any two
 drawings which are exclusive and have the same parent may never
 overlap partially or fully.
 
