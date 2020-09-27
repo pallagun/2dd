@@ -56,6 +56,14 @@ drawings for other drawings.")
     (oset link _source-connector (2dd-link-connector))
     (oset link _target-connector (2dd-link-connector))
     link)
+(defun 2dd--link-ensure-edit-idx-is-valid (link)
+  "If LINK's current edit-idx is out of bounds, snap it to be valid."
+  ;; TODO - I think this is going to have to be called in a lot more
+  ;; places
+  (when-let ((current-edit-idx (2dd-get-edit-idx link)))
+    (let ((max-edit-idxs (1- (2dd-num-edit-idxs link))))
+      (when (> current-edit-idx max-edit-idxs)
+        (2dd-set-edit-idx link max-edit-idxs)))))
   
 (defsubst 2dd-link-class-p (any)
   "Equivalent of (object-of-class-p ANY '2dd-link)."
@@ -185,8 +193,8 @@ be replotted."
         (error "Inner path must have a cardinal displacement to the source connector"))
       (unless (2dg-cardinal-displacement-p target-pt (2dg-end inner-path))
         (error "Inner path must have a cardinal displacement to the target connector"))))
-
-  (oset link _inner-path inner-path))
+  (oset link _inner-path inner-path)
+  (2dd--link-ensure-edit-idx-is-valid link))
 (cl-defmethod 2dd-edit-history-contains-p ((link 2dd-link) (edit-type symbol))
   "Return non-nil if LINK's edit history contains EDIT-TYPE.
 

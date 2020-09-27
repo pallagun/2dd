@@ -161,6 +161,15 @@ positioning."
   "Return t if CONNECTOR has a connection to another drawing, nil otherwise."
   (and (oref connector connectee) t))
 
+(cl-defgeneric 2dd-disconnect ((connector 2dd-link-connector))
+  "Disconnect the CONNECTOR from its connectee and leave the connector where it is.")
+  
+(cl-defmethod 2dd-disconnect ((connector 2dd-link-connector))
+  "Disconnect the LINK from the target drawing and leave the connector where it is."
+  (let ((current-location (2dd-connection-point connector)))
+      (2dd-set-connectee connector nil)
+      (2dd--set-location connector `(:absolute-coord ,current-location))))
+
 (defsubst 2dd--copy-plist-remove (plist-to-copy removal-keys)
   "Return a copy of PLIST-TO-COPY with REMOVAL-KEYS missing."
   (cl-loop for elt in plist-to-copy
