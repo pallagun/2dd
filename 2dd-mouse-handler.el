@@ -110,7 +110,7 @@ will be cleared."
   ;; that or make a toggle to capture or not capture errors.
   ;; TODO - possibly I should be catching signals and not errors.
   (let ((error-message))
-    (condition-case caught-error
+    ;; (condition-case caught-error
         (let ((override-hook (assq type 2dd-mouse-overrides)))
           (if override-hook
               ;; Override hook only
@@ -121,9 +121,9 @@ will be cleared."
             (let ((hook (assq type 2dd-mouse-hooks)))
               (when hook
                 (apply (cdr hook) args)))))
-        (error (progn
-               (2dd-mouse-clear-all-overrides)
-               (setq error-message (second caught-error)))))
+        ;; (error (progn
+        ;;        (2dd-mouse-clear-all-overrides)
+        ;;        (setq error-message (second caught-error)))))
     error-message))
 (defsubst 2dd--mouse-handle-error (error-string)
   "Handle this mouse error"
@@ -202,40 +202,6 @@ It will"
                                                                  start-pixel
                                                                  nil
                                                                  nil))
-            ;; (when (eq event-type 'down-mouse-1)
-            ;;   (let ((down-mouse-1-preempt (2dd-mouse-get-preempt 'down-mouse-1)))
-            ;;     (when down-mouse-1-preempt
-            ;;       ;; if a mouse-down event causes an error and aborts this
-            ;;       ;; function the error will be displayed.  At that point
-            ;;       ;; when the mouse is released another event will be
-            ;;       ;; generated (a mouse click event, which I'm starting to
-            ;;       ;; understand is a bit more of a mouse-up event).  That
-            ;;       ;; mouse-click(mouse-up) event is another event and will
-            ;;       ;; clear the error displayed in the minibuffer.
-            ;;       ;; However, I wish to show the error message from the
-            ;;       ;; mouse-down event in the minibuffer after the mouse is
-            ;;       ;; released.  Therefore I will catch any errors from the
-            ;;       ;; mouse-down event here, allow the (track-mouse) form
-            ;;       ;; below to catch all mouse movement and even the
-            ;;       ;; mouse-click (mouse-up) event later.  After all mouse
-            ;;       ;; interactions I will then display the error.
-            ;;       ;;
-            ;;       ;; So
-            ;;       ;; - mouse down
-            ;;       ;; -  error generated -> capture error
-            ;;       ;; - enter (track-mouse) form which takes no actions and simply absorbs mouse events
-            ;;       ;; -  when that (track-mouse) form detects a click (mouse-up) exit.
-            ;;       ;; - Execute no functionality but finally signal the error captured.
-            ;;       (condition-case caught-error
-            ;;           (progn
-            ;;             (funcall down-mouse-1-preempt start-pixel)
-            ;;             (2dd-mouse-clear-preempt 'down-mouse-1))
-            ;;         (error (progn
-            ;;                  (2dd-mouse-clear-all-preempts)
-            ;;                  (setq bubble-up-error (second caught-error)))))
-            ;;       (setq event-count 1))))
-
-            ;; (2dd--mouse-run-hook event-type start-pixel nil nil)
 
             (if bubble-up-error
                 ;; there was an error, eat up all mouse motion and send the error.
@@ -247,7 +213,7 @@ It will"
                             (setq event (read-event))
                             (mouse-movement-p event))
                   (setq is-drag t)
-                  ;; (message "mouse track event: %s" event)
+                  ;;(message "mouse track event: %s" event)
                   ;; ok, you've started moving....
                   (incf event-count)
                   ;; (message "event count: %s" event-count)
@@ -268,7 +234,7 @@ It will"
                   (2dd--mouse-ignore-motion-send-error bubble-up-error)
                 (setq event-type (car event))
                 (setq 2dd-mouse-last-clicked-pixel (pixel-from-event event))
-                ;; (message "mouse post-drag event: %s" event)
+                ;;(message "mouse post-drag event: %s" event)
                 ;; this will either be a mouse-1,2 or 3 event.  It will
                 ;; not be a drag event so I won't be sending any drag
                 ;; delta information.
