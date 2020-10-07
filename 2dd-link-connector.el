@@ -5,6 +5,8 @@
 ;; one) other drawing object(s) that are connected and how they are
 ;; connected.
 
+(eval-when-compile (require 'subr-x))
+
 (require '2dg)
 (require '2dd-rect)
 
@@ -166,9 +168,9 @@ positioning."
   
 (cl-defmethod 2dd-disconnect ((connector 2dd-link-connector))
   "Disconnect the LINK from the target drawing and leave the connector where it is."
-  (let ((current-location (2dd-connection-point connector)))
-      (2dd-set-connectee connector nil)
-      (2dd--set-location connector `(:absolute-coord ,current-location))))
+  (2dd-set-connectee connector nil)
+  (when-let ((current-location (2dd-connection-point connector)))
+    (2dd--set-location connector `(:absolute-coord ,current-location))))
 
 (defsubst 2dd--copy-plist-remove (plist-to-copy removal-keys)
   "Return a copy of PLIST-TO-COPY with REMOVAL-KEYS missing."
