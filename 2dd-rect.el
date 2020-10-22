@@ -261,8 +261,50 @@ Points start at the bottom left and go counter clock wise."
                       :x-max (- (2dg-x-max rectg) pad-x)
                       :y-min (+ (2dg-y-min rectg) pad-y)
                       :y-max (- (2dg-y-max rectg) pad-y))))
+(cl-defmethod 2dd-set-from ((drawing-rect 2dd-rect) (serialized-geom string) &optional parent-canvas)
+  "Set the geometry of DRAWING-RECT from SERIALIZED-GEOM.
+
+This function _should_ accept the output of
+2dd-serializen-geometry.
+
+It should be of the form \"(:absolute #s(2dg-rect ...)\""
+  (let* ((read-sexp (read-from-string serialized-geom))
+         (source-geom (car read-sexp)))
+    (unless (listp source-geom)
+      (error "2dd-set-from for a 2dd-rect expects geometry to be a stringified list"))
+    (block is-set
+      (when-let ((absolute-geom (plist-get source-geom :absolute)))
+        (2dd-set-from drawing-rect absolute-geom parent-canvas)
+        (return-from is-set))
+      (when-let ((relative-geom (plist-get source-geom :relative)))
+        (when (2dg-rect-class-p relative-geom)
+          (2dd--rect-set-from-relative drawing-rect relative-geom parent-canvas)
+          (return-from is-set))
+        ;; (when (and (listp relative-geom)
+        ;;            (numberp (plist-get relative-geom :division-idx)))
+           
+          ;; else
+        (return-from is-set))
+      (error "2dd-set-from is unable to set geometry for a 2dd-rect given: %s" serialized-geom))))
+(defun 2dd--rect-set-from-relative (drawing-rect relative-rect parent-canvas)
+  "Set the geometry of DRAWING-RECT from RELATIVE-RECT in PARENT-CANVAS"
+  (unless parent-canvas
+    (error "Unable to set 2dd-rect relative geometry without a parent canvas reference."))
+  (oset drawing-rect
+        _relative-geometry
+        (2dd--clone-2dg-rect relative-rect))
+
+  ;; _TODO, can probably use an oset for this?
+  (2dd-set-geometry drawing-rect (2dg-absolute-coordinates parent-canvas relative-rect))
+  ;; (oset drawing-rect
+  ;;       _geometry
+  ;;       (2dg-absolute-coordinates relative-rect parent-canvas))
+        
+  )
 (cl-defmethod 2dd-set-from ((drawing-rect 2dd-rect) (source-rect 2dg-rect) &optional parent-canvas)
   "Set the x/y min/max coordinates of DRAWING-RECT to match SOURCE-RECT.
+
+NOTE: this function always sets the *absolute* SOURCE-RECT.
 
 When PARENT-CANVAS is supplied the relative coordinate will also
 be set.  If PARENT-CANVAS is not suppled any relative coordinates
@@ -272,6 +314,7 @@ will be cleared."
         ;; missing a rect entirely, create one.
         (setf rect (2dd--clone-2dg-rect source-rect))
       ;; rect exists, just set it.
+      ;; (2dg-rect-set-from rect source-rect)
       (oset rect x-min (oref source-rect x-min))
       (oset rect x-max (oref source-rect x-max))
       (oset rect y-min (oref source-rect y-min))
@@ -288,7 +331,7 @@ will be cleared."
       ;; Best to clear them and not be wrong than leave them and be
       ;; incorrect.
       (setf relative-rect nil))))
-(cl-defmethod 2dd-set-from ((rect 2dd-rect) geometry-description &optional parent-canvas)
+(cl-defmethod 2dd-set-from ((rect 2dd-rect) (geometry-description list) &optional parent-canvas)
   "Set the geometry of RECT to match what GEOMETRY-DESCRIPTION returns.
 
 Currently GEOMETRY-DESCRIPTION may only take a single form, a
@@ -300,19 +343,21 @@ Currently. :description can be anything.
 PARENT-CANVAS is not used."
   (unless parent-canvas
     (error "Unable to use geometry-description list in 2dd-set-from without a parent canvas"))
-  (with-slots ((rectg _geometry) (relative-rect _relative-geometry)) rect
-    (let* ((provider (plist-get geometry-description :lambda))
-           (relative-rect (funcall provider))
-           (source-rect (2dg-absolute-coordinates parent-canvas relative-rect)))
-      (if (null rectg)
-          ;; missing a rect entirely, create one.
-          (setf rectg (2dd--clone-2dg-rect source-rect))
-      ;; rect exists, just set it.
-      (oset rectg x-min (oref source-rect x-min))
-      (oset rectg x-max (oref source-rect x-max))
-      (oset rectg y-min (oref source-rect y-min))
-      (oset rectg y-max (oref source-rect y-max))))
-    (2dd-set-relative-geometry rect geometry-description)))
+  (let ((provider (plist-get geometry-description :lambda)))
+    (unless provider
+      (error "Unable to set a geomtry by list unless there is a lambda"))
+    (with-slots ((rectg _geometry) (relative-rect _relative-geometry)) rect
+      (let* ((relative-rect (funcall provider))
+             (source-rect (2dg-absolute-coordinates parent-canvas relative-rect)))
+        (if (null rectg)
+            ;; missing a rect entirely, create one.
+            (setf rectg (2dd--clone-2dg-rect source-rect))
+          ;; rect exists, just set it.
+          (oset rectg x-min (oref source-rect x-min))
+          (oset rectg x-max (oref source-rect x-max))
+          (oset rectg y-min (oref source-rect y-min))
+          (oset rectg y-max (oref source-rect y-max))))
+      (2dd-set-relative-geometry rect geometry-description))))
 
 (defun 2dd--get-raw-rect-relative-geometry (rect)
   "Return the raw relative geometry.
